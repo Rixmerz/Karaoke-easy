@@ -48,23 +48,41 @@ COUNT_MAX = 4.0   # duración máxima de la cuenta atrás
 N_DOTS = 4
 
 
-def countdowns(lines):
-    """Puntitos que se rellenan antes de que vuelva la voz (intro y pausas largas)."""
+def countdowns(lines, beats=None):
+    """Puntitos que se rellenan antes de que vuelva la voz (intro y pausas largas).
+    Con `beats`, cada puntito dura exactamente un tiempo de la canción y el último acaba al entrar la voz."""
+    import bisect
+
     out = []
     prev_end = 0.0
     for line in lines:
         start = line[0].start
         gap = start - prev_end
         if gap >= MIN_GAP or (prev_end == 0.0 and start >= 2.0):
-            dur = min(COUNT_MAX, gap)
-            step = max(1, int(round(dur * 100 / N_DOTS)))
-            text = "".join(f"{{\\kf{step}}}● " for _ in range(N_DOTS)).strip()
-            out.append(f"Dialogue: 1,{_ts(start - dur)},{_ts(start)},Dots,,0,0,0,,{{\\fad(150,0)}}{text}")
+            ticks = None
+            if beats is not None and len(beats) > N_DOTS:
+                k = bisect.bisect_right(list(beats), start + 0.12)  # tiempo en que entra la voz (o justo antes)
+                b = list(beats[max(0, k - N_DOTS - 1):k])
+                if len(b) == N_DOTS + 1 and b[0] >= prev_end and start - b[0] <= 2.5 * COUNT_MAX:
+                    ticks = b[:-1] + [start]
+            if ticks:
+                # ticks = 4 tiempos + entrada de la voz: cada puntito se llena durante un tiempo
+                beat = ticks[1] - ticks[0]
+                pre = int(round(beat * 100))  # aparecen vacíos un tiempo antes
+                fills = "".join(f"{{\\kf{max(1, int(round((t1 - t0) * 100)))}}}● "
+                                for t0, t1 in zip(ticks, ticks[1:])).strip()
+                out.append(f"Dialogue: 1,{_ts(ticks[0] - beat)},{_ts(start)},Dots,,0,0,0,,"
+                           f"{{\\fad(150,0)}}{{\\k{pre}}}{fills}")
+            else:
+                dur = min(COUNT_MAX, gap)
+                step = max(1, int(round(dur * 100 / N_DOTS)))
+                text = "".join(f"{{\\kf{step}}}● " for _ in range(N_DOTS)).strip()
+                out.append(f"Dialogue: 1,{_ts(start - dur)},{_ts(start)},Dots,,0,0,0,,{{\\fad(150,0)}}{text}")
         prev_end = line[-1].end
     return out
 
 
-def build_ass(words, title, palette, width=1920, height=1080, lead=1.5):
+def build_ass(words, title, palette, width=1920, height=1080, lead=1.5, beats=None):
     """palette: dict con 'sung','unsung','outline' en formato &HBBGGRR."""
     lines = group_lines(words)
     fs = int(height * 0.075)
@@ -86,7 +104,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     ev = []
     first = lines[0][0].start if lines else 5.0
-    for d in countdowns(lines):
+    for d in countdowns(lines, beats):
         ev.append(d)
     if first > 2.5:
         title_end = first - min(COUNT_MAX, first) if first >= MIN_GAP else first - lead

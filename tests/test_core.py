@@ -76,3 +76,20 @@ def test_ass_karaoke_timing():
 def test_ass_escapes_braces():
     ass = build_ass([Word("{x}", 1, 2)], "t", PAL)
     assert "(x)" in ass
+
+
+def test_countdown_follows_beats():
+    beats = np.arange(0, 20, 0.5)                    # 120 BPM
+    w = words_at([8.02, 8.5, 9.0])                    # la voz entra (casi) en un tiempo
+    cd = countdowns(group_lines(w), beats)[0]
+    # 4 puntitos de medio segundo; aparece en 5.5 y acaba con la voz
+    assert "0:00:05.50,0:00:08.02" in cd
+    assert cd.count("\\kf50") == 3 and "\\kf52" in cd and "\\k50}" in cd
+
+
+def test_snap_words_to_onsets_and_grid():
+    from karaoke_easy.rhythm import grid, snap_words
+    w = [Word("a", 1.04, 1.4), Word("b", 2.03, 2.4), Word("c", 3.31, 3.6)]
+    out, moved = snap_words(w, onsets=np.array([1.0, 5.0]), beat_grid=grid(np.arange(0, 6, 0.5)))
+    assert [round(x.start, 3) for x in out] == [1.0, 2.0, 3.31]   # 'c' lejos de todo: no se mueve
+    assert moved == 2

@@ -70,6 +70,7 @@ class KaraokeBuilder:
         self.work.mkdir(parents=True, exist_ok=True)
         self.device = _device(opts.device)
         self.key = None
+        self.rhythm = None
         paths.setup_offline()
 
     # 1 ------------------------------------------------------------------
@@ -126,6 +127,24 @@ class KaraokeBuilder:
             words = self.refine(words, vocals)
         (self.work / "letra.json").write_text(json.dumps([w.__dict__ for w in words], ensure_ascii=False, indent=1),
                                               encoding="utf-8")
+        return words
+
+    def fit_rhythm(self, words, inst: Path, voc: Path):
+        """Detecta pulso/compás y cuadra el inicio de las palabras con los ataques de la voz y el pulso."""
+        try:
+            import librosa
+            from . import rhythm
+
+            y, sr = librosa.load(str(inst), sr=22050, mono=True)
+            self.rhythm = rhythm.analyze(y, sr)
+            self.log(f"Tempo: {self.rhythm.tempo:.0f} BPM, {len(self.rhythm.downbeats)} compases.")
+            v, _ = librosa.load(str(voc), sr=22050, mono=True)
+            words, moved = rhythm.snap_words(words, rhythm.vocal_onsets(v, sr), rhythm.grid(self.rhythm.beats))
+            self.log(f"Palabras cuadradas con el ritmo: {moved}/{len(words)} (ajustes de < 80 ms).")
+            (self.work / "letra_final.json").write_text(
+                json.dumps([w.__dict__ for w in words], ensure_ascii=False, indent=1), encoding="utf-8")
+        except Exception as e:
+            self.log(f"Análisis rítmico no disponible ({e}).")
         return words
 
     def refine(self, words, vocals: Path):
@@ -297,7 +316,8 @@ class KaraokeBuilder:
             title += f"\\NTono: {music.key_name(k[0] + self.o.semitones, k[1])}"
             if self.o.semitones:
                 title += f" ({self.o.semitones:+d})"
-        (self.work / "karaoke.ass").write_text(build_ass(words, title, pal, W, H), encoding="utf-8-sig")
+        beats = self.rhythm.beats if self.rhythm is not None else None
+        (self.work / "karaoke.ass").write_text(build_ass(words, title, pal, W, H, beats=beats), encoding="utf-8-sig")
         out = self.out / f"{self.name}_karaoke{suffix}.mp4"
         wave_col = f"0x{r:02X}{g:02X}{b:02X}"
         use_video = self.o.use_source_video and self.src.suffix.lower() in VIDEO_EXT
@@ -335,7 +355,8 @@ class KaraokeBuilder:
         self.progress(0)
         wav = self.extract_audio(); self.progress(1 / steps)
         inst, voc = self.separate(wav); self.progress(2 / steps)
-        words = self.transcribe(voc); self.progress(3 / steps)
+        words = self.transcribe(voc)
+        words = self.fit_rhythm(words, inst, voc); self.progress(3 / steps)
         self.detect_key(inst)
         track = self.transpose(inst); self.progress(4 / steps)
         suffix = "" if self.o.semitones == 0 else f"_{music.key_name(self.key[0] + self.o.semitones, self.key[1])}"

@@ -12,6 +12,7 @@ Programa para Windows que convierte una canción (**MP4, MP3, WAV**, también M4
 |---|---|
 | Quitar la voz | Demucs `htdemucs` (IA de separación de fuentes) |
 | Letra correcta | LRCLIB (o pegada a mano); si no hay, Whisper |
+| Ritmo | Pulso y compás (librosa): cuenta atrás de 4 tiempos que acaba en la entrada de la voz; inicios de palabra cuadrados al ataque de la voz o a la semicorchea más cercana (< 80 ms) |
 | Sincronización por palabra | Whisper (ventana de cada verso) + alineación forzada MMS_FA (CTC) recortada a la voz real |
 | Detección de tonalidad | Krumhansl-Schmuckler sobre cromagrama (librosa) |
 | Transposición sin cambiar tempo | librosa pitch shift |
