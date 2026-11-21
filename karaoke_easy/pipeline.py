@@ -40,7 +40,7 @@ def ffmpeg_exe() -> str:
 
 def run_ffmpeg(args, cwd=None):
     cmd = [ffmpeg_exe(), "-y", "-hide_banner", "-loglevel", "error", *args]
-    p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, creationflags=NO_WINDOW)
+    p = subprocess.run(cmd, cwd=cwd, capture_output=True, encoding="utf-8", errors="replace", creationflags=NO_WINDOW)
     if p.returncode != 0:
         raise RuntimeError("ffmpeg falló:\n" + p.stderr[-2000:])
 

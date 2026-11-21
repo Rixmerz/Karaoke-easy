@@ -28,7 +28,7 @@ def test_full_render(tmp_path):
     assert video.name == "mi canción_karaoke_Gm.mp4" and video.stat().st_size > 10_000
     assert mp3.exists()
     assert (video.parent / "mi canción_con_voz_Gm.mp3").exists()
-    info = subprocess.run([ffmpeg_exe(), "-i", str(video)], capture_output=True, text=True).stderr
+    info = subprocess.run([ffmpeg_exe(), "-i", str(video)], capture_output=True, encoding="utf-8", errors="replace").stderr
     assert len(re.findall(r"Stream #0:\d+.*Audio", info)) == 2
     assert "Con voz guía" in info and "Karaoke (sin voz)" in info
     ass = (b.work / "karaoke.ass").read_text(encoding="utf-8-sig")
