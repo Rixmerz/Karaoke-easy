@@ -22,7 +22,7 @@ def selftest(path):
         found = [w for w in expect if w in words]
         print(f"Esperadas encontradas: {len(found)}/{len(expect)} {found}")
         assert video.stat().st_size > 50_000, "vídeo vacío"
-        assert mp3.exists() and (video.parent / f"{b.name}_con_voz_Gm.mp3").exists(), "faltan MP3"
+        assert mp3.exists() and (video.parent / mp3.name.replace("_pista", "_con_voz")).exists(), "faltan MP3"
         assert not expect or len(found) >= len(expect) // 2, "la transcripción no reconoce la letra"
         print("SELFTEST OK")
         return 0
