@@ -5,7 +5,7 @@ NOTES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 NOTES_FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 # Tonalidades que se escriben normalmente con bemoles
 FLAT_MAJOR = {1, 3, 5, 8, 10}
-FLAT_MINOR = {0, 2, 5, 7, 10}
+FLAT_MINOR = {0, 2, 3, 5, 7, 10}
 
 # Perfiles de Krumhansl-Schmuckler
 MAJOR_PROFILE = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])

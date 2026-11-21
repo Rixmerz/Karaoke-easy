@@ -30,6 +30,7 @@ class App(tk.Tk):
         self.model_var = tk.StringVar(value="small" if "small" in MODELS else MODELS[-1])
         self.lang_var = tk.StringVar(value="Autodetectar")
         self.video_var = tk.BooleanVar(value=True)
+        self.guide_var = tk.BooleanVar(value=True)
         self.key_var = tk.StringVar(value="Tono original: (sin analizar)")
         self.target_var = tk.StringVar(value="")
 
@@ -64,6 +65,8 @@ class App(tk.Tk):
         ttk.Combobox(opt, textvariable=self.lang_var, values=list(LANGS), state="readonly", width=13).grid(row=0, column=3, padx=6)
         ttk.Checkbutton(opt, text="Usar el vídeo original de fondo (si es MP4)", variable=self.video_var).grid(
             row=1, column=0, columnspan=4, sticky="w", pady=(6, 0))
+        ttk.Checkbutton(opt, text="Incluir pista con voz guía (activable en cualquier momento desde el reproductor)",
+                        variable=self.guide_var).grid(row=2, column=0, columnspan=4, sticky="w", pady=(4, 0))
 
         self.btn = ttk.Button(f, text="▶  Crear karaoke", command=self.start)
         self.btn.grid(row=4, column=0, columnspan=3, sticky="ew", **pad)
@@ -163,7 +166,7 @@ class App(tk.Tk):
 
         opts = Options(input_path=path, output_dir=self.out_var.get(), semitones=int(self.st_var.get()),
                        whisper_model=self.model_var.get(), language=LANGS[self.lang_var.get()],
-                       use_source_video=self.video_var.get())
+                       use_source_video=self.video_var.get(), guide_track=self.guide_var.get())
         self.busy = True
         self.btn.configure(state="disabled")
 

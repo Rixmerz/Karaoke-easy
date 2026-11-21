@@ -29,6 +29,7 @@ class Options:
     width: int = 1920
     height: int = 1080
     device: str = "auto"  # auto | cpu | cuda
+    guide_track: bool = True  # añade pista de audio alternativa con la voz
 
 
 def ffmpeg_exe() -> str:
@@ -141,11 +142,12 @@ class KaraokeBuilder:
         self.log(f"Tonalidad detectada: {music.key_name(tonic, minor)} (confianza {conf:.2f})")
         return tonic, minor
 
-    def transpose(self, inst: Path) -> Path:
+    def transpose(self, inst: Path, label=True) -> Path:
         st = self.o.semitones
         if st == 0:
             return inst
-        self.log("Transponiendo: " + music.transpose_label(*self.key, st))
+        if label:
+            self.log("Transponiendo: " + music.transpose_label(*self.key, st))
         import soundfile as sf
 
         y, sr = sf.read(str(inst), dtype="float32", always_2d=True)
@@ -153,7 +155,7 @@ class KaraokeBuilder:
         peak = np.abs(shifted).max()
         if peak > 0.99:
             shifted *= 0.99 / peak
-        out = self.work / f"instrumental_{st:+d}.wav"
+        out = self.work / f"{inst.stem}_{st:+d}.wav"
         sf.write(str(out), shifted, sr)
         return out
 
@@ -202,7 +204,22 @@ class KaraokeBuilder:
         r, g, b = (int(c * 255) for c in colorsys.hsv_to_rgb((hue + 0.5) % 1, 0.75, 1.0))
         return {"sung": f"&H00{b:02X}{g:02X}{r:02X}", "unsung": "&H00FFFFFF", "outline": "&H00101010"}, (r, g, b)
 
-    def render(self, words, audio: Path, suffix: str) -> Path:
+    def guide_mix(self, inst: Path, voc: Path) -> Path:
+        """Pista 'con voz guía': instrumental + voz (ambas ya transpuestas)."""
+        import soundfile as sf
+
+        a, sr = sf.read(str(inst), dtype="float32", always_2d=True)
+        v, _ = sf.read(str(voc), dtype="float32", always_2d=True)
+        n = min(len(a), len(v))
+        mix = a[:n] + v[:n]
+        peak = np.abs(mix).max()
+        if peak > 0.99:
+            mix *= 0.99 / peak
+        out = self.work / f"con_voz_{self.o.semitones:+d}.wav"
+        sf.write(str(out), mix, sr)
+        return out
+
+    def render(self, words, audio: Path, suffix: str, guide: Path | None = None) -> Path:
         W, H = self.o.width, self.o.height
         pal, (r, g, b) = self.ass_palette()
         title = self.name
@@ -227,13 +244,19 @@ class KaraokeBuilder:
             base = "[0:v]format=yuv420p[bg]"
         fc = (f"{base};[1:a]showwaves=s={W}x{H // 6}:mode=cline:rate=30:colors={wave_col}@0.55,format=rgba[w];"
               f"[bg][w]overlay=0:H-h-{H // 30}:shortest=1,ass=karaoke.ass,format=yuv420p[v]")
-        run_ffmpeg([*vin, "-i", str(audio.resolve()), "-filter_complex", fc, "-map", "[v]", "-map", "1:a",
+        gin, gmap = [], []
+        if guide is not None:
+            gin = ["-i", str(guide.resolve())]
+            gmap = ["-map", "2:a", "-metadata:s:a:1", "title=Con voz guía", "-metadata:s:a:1", "language=spa",
+                    "-disposition:a:1", "0"]
+        run_ffmpeg([*vin, "-i", str(audio.resolve()), *gin, "-filter_complex", fc, "-map", "[v]", "-map", "1:a",
+                    *gmap, "-metadata:s:a:0", "title=Karaoke (sin voz)", "-disposition:a:0", "default",
                     "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-c:a", "aac", "-b:a", "192k",
                     "-shortest", "-movflags", "+faststart", str(out.resolve())], cwd=str(self.work))
         return out
 
-    def export_audio(self, audio: Path, suffix: str) -> Path:
-        out = self.out / f"{self.name}_pista{suffix}.mp3"
+    def export_audio(self, audio: Path, suffix: str, kind="pista") -> Path:
+        out = self.out / f"{self.name}_{kind}{suffix}.mp3"
         run_ffmpeg(["-i", str(audio), "-c:a", "libmp3lame", "-b:a", "320k", str(out)])
         return out
 
@@ -248,9 +271,19 @@ class KaraokeBuilder:
         track = self.transpose(inst); self.progress(4 / steps)
         suffix = "" if self.o.semitones == 0 else f"_{music.key_name(self.key[0] + self.o.semitones, self.key[1])}"
         suffix = suffix.replace("#", "s")
+        guide = None
+        if self.o.guide_track:
+            self.log("Creando pista con voz guía…")
+            guide = self.guide_mix(track, self.transpose(voc, label=False))
+            self.export_audio(guide, suffix, "con_voz")
         mp3 = self.export_audio(track, suffix); self.progress(5 / steps)
-        video = self.render(words, track, suffix); self.progress(1)
+        video = self.render(words, track, suffix, guide); self.progress(1)
+        self.words = words
         self.log(f"Listo:\n  Vídeo: {video}\n  Pista: {mp3}")
+        if guide is not None:
+            self.log("El vídeo tiene 2 pistas de audio: 'Karaoke (sin voz)' y 'Con voz guía'. "
+                     "Cámbielas en cualquier momento desde el reproductor (VLC: tecla B; "
+                     "Reproductor multimedia de Windows: menú ⋯ › Idioma de audio).")
         return video, mp3
 
 

@@ -3,7 +3,9 @@
 Programa para Windows que convierte una canción (**MP4, MP3, WAV**, también M4A/FLAC/MKV/MOV) en:
 
 1. **Vídeo karaoke único** (MP4 1080p): letra sincronizada palabra por palabra con relleno de color, fondo generado a partir del nombre de la canción (colores/formas distintas para cada tema) o el vídeo original difuminado, y ondas de audio animadas.
-2. **Pista instrumental** (MP3 320 kbps) sin voz, opcionalmente **transpuesta** en semitonos.
+2. **Cuenta atrás con puntitos** (● ● ● ●) que se rellenan en la intro y en pausas largas sin voz, para saber cuándo entrar.
+3. **Voz guía activable en cualquier momento**: el MP4 trae 2 pistas de audio, *Karaoke (sin voz)* y *Con voz guía*; se cambia en vivo desde el reproductor (VLC: tecla **B**; Reproductor multimedia de Windows: **⋯ › Idioma de audio**). También se exporta `_con_voz.mp3`.
+4. **Pista instrumental** (MP3 320 kbps) sin voz, opcionalmente **transpuesta** en semitonos.
 
 ## Cómo funciona
 | Paso | Herramienta |
@@ -45,3 +47,6 @@ GitHub Actions (`.github/workflows/windows-installer.yml`) construye en Windows 
 
 - Descarga: pestaña *Actions* → último run → artefacto **KaraokeEasy-Setup**. Al crear un tag `v1.0.0` se publica también como *Release*.
 - Construcción local: `instalar.bat` y luego `build_exe.bat` (requiere Inno Setup 6).
+
+## Pruebas
+`python -m pytest tests` (tonalidades, transposición, tiempos karaoke, cuenta atrás, render con 2 pistas). En CI además se ejecuta el `.exe` empaquetado sin internet sobre una canción de prueba con voz sintética de Windows y se verifica que separe, transcriba y genere los archivos.

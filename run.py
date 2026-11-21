@@ -13,9 +13,18 @@ def selftest(path):
         from karaoke_easy.pipeline import KaraokeBuilder, Options
 
         print("Modelos incluidos:", paths.bundled_whisper_models(), "en", paths.MODELS_DIR)
-        b = KaraokeBuilder(Options(path, ".", semitones=-2, whisper_model="base", width=640, height=360),
+        b = KaraokeBuilder(Options(path, os.environ.get("KARAOKE_OUT", "."), semitones=-2, whisper_model="base", width=640, height=360),
                            log=lambda m: print(m, flush=True))
-        b.run()
+        video, mp3 = b.run()
+        words = " ".join(w.text for w in b.words).lower()
+        print("PALABRAS:", words)
+        expect = os.environ.get("KARAOKE_EXPECT", "").lower().split()
+        found = [w for w in expect if w in words]
+        print(f"Esperadas encontradas: {len(found)}/{len(expect)} {found}")
+        assert video.stat().st_size > 50_000, "vídeo vacío"
+        assert mp3.exists() and (video.parent / f"{b.name}_con_voz_Gm.mp3").exists(), "faltan MP3"
+        assert not expect or len(found) >= len(expect) // 2, "la transcripción no reconoce la letra"
+        print("SELFTEST OK")
         return 0
     except Exception:
         traceback.print_exc()
