@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import music
+from . import music, paths
 from .subtitles import Word, build_ass
 
 VIDEO_EXT = {".mp4", ".mkv", ".mov", ".avi", ".webm"}
@@ -67,6 +67,7 @@ class KaraokeBuilder:
         self.work.mkdir(parents=True, exist_ok=True)
         self.device = _device(opts.device)
         self.key = None
+        paths.setup_offline()
 
     # 1 ------------------------------------------------------------------
     def extract_audio(self) -> Path:
@@ -114,7 +115,9 @@ class KaraokeBuilder:
         from faster_whisper import WhisperModel
 
         ctype = "float16" if self.device == "cuda" else "int8"
-        model = WhisperModel(self.o.whisper_model, device=self.device, compute_type=ctype)
+        local = paths.whisper_dir(self.o.whisper_model)
+        src = str(local) if (local / "model.bin").exists() else self.o.whisper_model
+        model = WhisperModel(src, device=self.device, compute_type=ctype)
         segments, info = model.transcribe(str(vocals), language=self.o.language, word_timestamps=True,
                                           vad_filter=True, beam_size=5,
                                           condition_on_previous_text=False)

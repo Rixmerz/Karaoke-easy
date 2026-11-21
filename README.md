@@ -39,3 +39,9 @@ Si Whisper se equivoca, edite `_trabajo\letra.json` (texto y tiempos) y vuelva a
 ```
 python cli.py "mi cancion.mp3" -o salida -s -2 -m medium -l es
 ```
+
+## Instalador para usuarios finales (modelos incluidos)
+GitHub Actions (`.github/workflows/windows-installer.yml`) construye en Windows un **`KaraokeEasy-Setup-x.y.z.exe`** que ya trae dentro Demucs `htdemucs` y Whisper `base`/`small`: el usuario solo hace *Siguiente → Instalar*, abre el programa y procesa **sin internet ni Python**.
+
+- Descarga: pestaña *Actions* → último run → artefacto **KaraokeEasy-Setup**. Al crear un tag `v1.0.0` se publica también como *Release*.
+- Construcción local: `instalar.bat` y luego `build_exe.bat` (requiere Inno Setup 6).

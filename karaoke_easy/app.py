@@ -6,11 +6,11 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from . import music
+from . import music, paths
 
 LANGS = {"Autodetectar": None, "Español": "es", "Inglés": "en", "Portugués": "pt",
          "Italiano": "it", "Francés": "fr", "Alemán": "de"}
-MODELS = ["tiny", "base", "small", "medium", "large-v3"]
+MODELS = paths.bundled_whisper_models() or ["tiny", "base", "small", "medium", "large-v3"]
 FILETYPES = [("Audio/Vídeo", "*.mp4 *.mp3 *.wav *.m4a *.flac *.mkv *.mov"), ("Todos", "*.*")]
 
 
@@ -27,7 +27,7 @@ class App(tk.Tk):
         self.in_var = tk.StringVar()
         self.out_var = tk.StringVar(value=str(Path.home() / "Videos"))
         self.st_var = tk.IntVar(value=0)
-        self.model_var = tk.StringVar(value="small")
+        self.model_var = tk.StringVar(value="small" if "small" in MODELS else MODELS[-1])
         self.lang_var = tk.StringVar(value="Autodetectar")
         self.video_var = tk.BooleanVar(value=True)
         self.key_var = tk.StringVar(value="Tono original: (sin analizar)")
@@ -176,6 +176,15 @@ class App(tk.Tk):
 
 
 def main():
+    import multiprocessing
+    import os
+    import sys
+
+    multiprocessing.freeze_support()
+    # En el .exe sin consola stdout/stderr son None y algunas librerías fallan al escribir
+    for name in ("stdout", "stderr"):
+        if getattr(sys, name) is None:
+            setattr(sys, name, open(os.devnull, "w"))
     App().mainloop()
 
 
