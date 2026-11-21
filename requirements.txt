@@ -5,3 +5,4 @@ soundfile>=0.12.1
 numpy<2.1
 Pillow>=10.0
 imageio-ffmpeg>=0.5.1
+torchaudio

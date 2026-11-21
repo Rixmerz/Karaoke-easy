@@ -2,7 +2,7 @@
 from PyInstaller.utils.hooks import collect_all, collect_data_files
 
 datas, binaries, hidden = [("models", "models")], [], []
-for pkg in ["demucs", "faster_whisper", "ctranslate2", "imageio_ffmpeg", "soxr", "onnxruntime", "julius", "openunmix"]:
+for pkg in ["demucs", "faster_whisper", "ctranslate2", "imageio_ffmpeg", "soxr", "onnxruntime", "julius", "openunmix", "torchaudio"]:
     try:
         d, b, h = collect_all(pkg)
         datas += d; binaries += b; hidden += h

@@ -13,7 +13,7 @@ def selftest(path):
         from karaoke_easy.pipeline import KaraokeBuilder, Options
 
         print("Modelos incluidos:", paths.bundled_whisper_models(), "en", paths.MODELS_DIR)
-        b = KaraokeBuilder(Options(path, os.environ.get("KARAOKE_OUT", "."), semitones=-2, whisper_model="base", width=640, height=360),
+        b = KaraokeBuilder(Options(path, os.environ.get("KARAOKE_OUT", "."), semitones=-2, whisper_model="small", width=640, height=360),
                            log=lambda m: print(m, flush=True))
         video, mp3 = b.run()
         words = " ".join(w.text for w in b.words).lower()

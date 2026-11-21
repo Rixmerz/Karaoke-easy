@@ -18,6 +18,18 @@ from demucs.pretrained import get_model  # noqa: E402
 get_model("htdemucs")
 print("Demucs htdemucs OK ->", paths.TORCH_HOME)
 
+import torch  # noqa: E402
+from torchaudio.pipelines import MMS_FA  # noqa: E402
+
+from karaoke_easy import aligner  # noqa: E402
+
+if not aligner.model_file().exists():
+    m = MMS_FA.get_model(with_star=False)
+    torch.save({k: v.half() for k, v in m.state_dict().items()}, aligner.model_file())
+    import shutil
+    (paths.TORCH_HOME / "hub" / "checkpoints" / "model.pt").unlink(missing_ok=True)  # copia fp32
+print("MMS_FA OK ->", aligner.model_file())
+
 from faster_whisper import download_model  # noqa: E402
 
 for name in sys.argv[1:] or ["base", "small"]:

@@ -4,7 +4,7 @@ REM Requiere Inno Setup 6 (https://jrsoftware.org/isinfo.php) para el paso final
 cd /d %~dp0
 call .venv\Scripts\activate
 pip install pyinstaller
-python tools\download_models.py base small || exit /b 1
+python tools\download_models.py small || exit /b 1
 pyinstaller --noconfirm KaraokeEasy.spec || exit /b 1
 "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" installer\KaraokeEasy.iss
 echo Instalador en Output\

@@ -110,19 +110,23 @@ def align(lines, asr_words):
                 if bj is not None and best >= 0.6:
                     times[i] = (asr_words[bj].start, asr_words[bj].end)
 
-    # Desplazamiento global LRC -> audio (si la letra trae tiempos), para líneas sin anclas
-    offs, prev = [], None
+    # Desfase LRC -> audio por verso (las versiones de vídeo/álbum difieren por tramos):
+    # se toma el de la línea anclada más cercana.
+    line_off = {}
+    prev = None
     for (li, _), t in zip(ref, times):
-        if li != prev and t and lines[li][0] is not None:  # primera palabra de la línea reconocida
-            offs.append(t[0] - lines[li][0])
+        if li != prev and t and lines[li][0] is not None:
+            line_off[li] = t[0] - lines[li][0]
         prev = li
-    offset = statistics.median(offs) if offs else None
-
-    # Línea sin ninguna palabra reconocida pero con tiempo LRC -> anclar su inicio
-    for li, (tl, line) in enumerate(lines):
-        idx = [k for k, (l, _) in enumerate(ref) if l == li]
-        if offset is not None and tl is not None and not any(times[k] for k in idx):
-            times[idx[0]] = (tl + offset, tl + offset + 0.3)
+    if line_off:
+        anchored = sorted(line_off)
+        for li, (tl, line) in enumerate(lines):
+            idx = [k for k, (l, _) in enumerate(ref) if l == li]
+            if tl is None or any(times[k] for k in idx):
+                continue
+            near = min(anchored, key=lambda a: (abs(a - li), a > li))
+            off = line_off[near]
+            times[idx[0]] = (tl + off, tl + off + 0.3)
 
     # Monotonía: descartar anclas que retroceden en el tiempo
     last = -1.0
@@ -175,3 +179,13 @@ def initial_prompt(lines, max_chars=600):
     """Texto para orientar a Whisper con el vocabulario de la canción."""
     txt = " ".join(l for _, l in lines)
     return txt[:max_chars]
+
+
+def split_lines(words):
+    """Agrupa las palabras alineadas por verso (las que empiezan con '\\n' abren verso)."""
+    lines = []
+    for w in words:
+        if w.text.startswith("\n") or not lines:
+            lines.append([])
+        lines[-1].append(w)
+    return lines

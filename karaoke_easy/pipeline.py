@@ -123,9 +123,32 @@ class KaraokeBuilder:
 
             words = align(lines, asr)
             self.log(f"Letra alineada con el audio: {len(lines)} líneas, {len(words)} palabras.")
+            words = self.refine(words, vocals)
         (self.work / "letra.json").write_text(json.dumps([w.__dict__ for w in words], ensure_ascii=False, indent=1),
                                               encoding="utf-8")
         return words
+
+    def refine(self, words, vocals: Path):
+        """Afina cada palabra con alineación forzada (MMS_FA) dentro de la ventana de su verso."""
+        try:
+            from . import aligner
+            from .lyrics import split_lines
+            import librosa
+        except Exception as e:
+            self.log(f"Alineación forzada no disponible ({e}).")
+            return words
+        self.log("Afinando la sincronización palabra a palabra (alineación forzada)…")
+        lines = split_lines(words)
+        wins = []
+        for i, ln in enumerate(lines):
+            nxt = lines[i + 1][0].start if i + 1 < len(lines) else ln[-1].end + 3
+            wins.append((ln[0].start - 1.5, max(ln[-1].end, nxt) + 1.0))
+        audio, _ = librosa.load(str(vocals), sr=aligner.SR, mono=True)
+        try:
+            return aligner.align_lines(audio, lines, wins, device=self.device, log=self.log)
+        except Exception as e:
+            self.log(f"Alineación forzada falló ({e}); se mantiene la sincronización aproximada.")
+            return words
 
     def get_lyrics(self):
         from . import lyrics

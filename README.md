@@ -11,7 +11,8 @@ Programa para Windows que convierte una canción (**MP4, MP3, WAV**, también M4
 | Paso | Herramienta |
 |---|---|
 | Quitar la voz | Demucs `htdemucs` (IA de separación de fuentes) |
-| Letra con tiempos (voz → texto) | Whisper (`faster-whisper`) con marcas de tiempo por palabra |
+| Letra correcta | LRCLIB (o pegada a mano); si no hay, Whisper |
+| Sincronización por palabra | Whisper (ventana de cada verso) + alineación forzada MMS_FA (CTC) recortada a la voz real |
 | Detección de tonalidad | Krumhansl-Schmuckler sobre cromagrama (librosa) |
 | Transposición sin cambiar tempo | librosa pitch shift |
 | Vídeo | ffmpeg (incluido vía `imageio-ffmpeg`) + subtítulos ASS `\kf` |
@@ -43,7 +44,7 @@ python cli.py "mi cancion.mp3" -o salida -s -2 -m medium -l es
 ```
 
 ## Instalador para usuarios finales (modelos incluidos)
-GitHub Actions (`.github/workflows/windows-installer.yml`) construye en Windows un **`KaraokeEasy-Setup-x.y.z.exe`** que ya trae dentro Demucs `htdemucs` y Whisper `base`/`small`: el usuario solo hace *Siguiente → Instalar*, abre el programa y procesa **sin internet ni Python**.
+GitHub Actions (`.github/workflows/windows-installer.yml`) construye en Windows un **`KaraokeEasy-Setup-x.y.z.exe`** que ya trae dentro Demucs `htdemucs`, Whisper `small` y el alineador MMS_FA: el usuario solo hace *Siguiente → Instalar*, abre el programa y procesa **sin internet ni Python**.
 
 - Descarga: pestaña *Actions* → último run → artefacto **KaraokeEasy-Setup**. Al crear un tag `v1.0.0` se publica también como *Release*.
 - Construcción local: `instalar.bat` y luego `build_exe.bat` (requiere Inno Setup 6).

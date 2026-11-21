@@ -27,8 +27,8 @@ jobs:
         run: python -m pytest -q tests
       - name: Prueba de la ventana (abre y cierra la interfaz)
         run: python -c "from karaoke_easy.app import App; a=App(); a.after(1500, a.destroy); a.mainloop(); print('GUI OK')"
-      - name: Descargar modelos (Demucs + Whisper base/small)
-        run: python tools/download_models.py base small
+      - name: Descargar modelos (Demucs + Whisper small + MMS_FA)
+        run: python tools/download_models.py small
       - name: PyInstaller
         run: pyinstaller --noconfirm KaraokeEasy.spec
       - name: Prueba real del .exe (voz sintetica + musica, sin internet)
