@@ -1,0 +1,263 @@
+"""Proceso completo: audio -> separación de voz -> letra con tiempos -> tono -> vídeo karaoke."""
+import hashlib
+import json
+import os
+import random
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+
+from . import music
+from .subtitles import Word, build_ass
+
+VIDEO_EXT = {".mp4", ".mkv", ".mov", ".avi", ".webm"}
+SR = 44100
+NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0  # oculta consola de ffmpeg en Windows
+
+
+@dataclass
+class Options:
+    input_path: str
+    output_dir: str
+    semitones: int = 0
+    whisper_model: str = "small"
+    language: str | None = None  # None = autodetectar
+    use_source_video: bool = True
+    width: int = 1920
+    height: int = 1080
+    device: str = "auto"  # auto | cpu | cuda
+
+
+def ffmpeg_exe() -> str:
+    import imageio_ffmpeg
+
+    return imageio_ffmpeg.get_ffmpeg_exe()
+
+
+def run_ffmpeg(args, cwd=None):
+    cmd = [ffmpeg_exe(), "-y", "-hide_banner", "-loglevel", "error", *args]
+    p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, creationflags=NO_WINDOW)
+    if p.returncode != 0:
+        raise RuntimeError("ffmpeg falló:\n" + p.stderr[-2000:])
+
+
+def _device(pref):
+    if pref != "auto":
+        return pref
+    try:
+        import torch
+
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except Exception:
+        return "cpu"
+
+
+class KaraokeBuilder:
+    def __init__(self, opts: Options, log=print, progress=lambda p: None):
+        self.o = opts
+        self.log = log
+        self.progress = progress
+        self.src = Path(opts.input_path).resolve()
+        self.name = self.src.stem
+        self.out = Path(opts.output_dir).resolve() / f"{self.name}_karaoke"
+        self.work = self.out / "_trabajo"
+        self.work.mkdir(parents=True, exist_ok=True)
+        self.device = _device(opts.device)
+        self.key = None
+
+    # 1 ------------------------------------------------------------------
+    def extract_audio(self) -> Path:
+        self.log("Extrayendo audio…")
+        wav = self.work / "original.wav"
+        run_ffmpeg(["-i", str(self.src), "-vn", "-ac", "2", "-ar", str(SR), "-c:a", "pcm_s16le", str(wav)])
+        return wav
+
+    # 2 ------------------------------------------------------------------
+    def separate(self, wav: Path):
+        inst, voc = self.work / "instrumental.wav", self.work / "voz.wav"
+        if inst.exists() and voc.exists():
+            self.log("Separación ya existente, reutilizando.")
+            return inst, voc
+        self.log(f"Quitando la voz con Demucs (htdemucs, {self.device})… puede tardar varios minutos.")
+        import soundfile as sf
+        import torch
+        from demucs.apply import apply_model
+        from demucs.pretrained import get_model
+
+        model = get_model("htdemucs")
+        model.to(self.device).eval()
+        data, sr = sf.read(str(wav), dtype="float32", always_2d=True)
+        mix = torch.from_numpy(data.T.copy())
+        ref = mix.mean(0)
+        mix = (mix - ref.mean()) / (ref.std() + 1e-8)
+        with torch.no_grad():
+            src = apply_model(model, mix[None].to(self.device), device=self.device,
+                              split=True, overlap=0.25, progress=False)[0].cpu()
+        src = src * (ref.std() + 1e-8) + ref.mean()
+        vi = model.sources.index("vocals")
+        vocals = src[vi]
+        accomp = sum(src[i] for i in range(len(model.sources)) if i != vi)
+        sf.write(str(voc), vocals.numpy().T, sr)
+        sf.write(str(inst), accomp.numpy().T, sr)
+        return inst, voc
+
+    # 3 ------------------------------------------------------------------
+    def transcribe(self, vocals: Path):
+        cache = self.work / "letra.json"
+        if cache.exists():
+            self.log("Letra ya transcrita, reutilizando (edite letra.json para corregir).")
+            return [Word(**w) for w in json.loads(cache.read_text(encoding="utf-8"))]
+        self.log(f"Transcribiendo la letra con Whisper ({self.o.whisper_model})…")
+        from faster_whisper import WhisperModel
+
+        ctype = "float16" if self.device == "cuda" else "int8"
+        model = WhisperModel(self.o.whisper_model, device=self.device, compute_type=ctype)
+        segments, info = model.transcribe(str(vocals), language=self.o.language, word_timestamps=True,
+                                          vad_filter=True, beam_size=5,
+                                          condition_on_previous_text=False)
+        self.log(f"Idioma detectado: {info.language}")
+        words = []
+        for seg in segments:
+            for w in seg.words or []:
+                if w.word.strip():
+                    words.append(Word(w.word.strip(), float(w.start), float(w.end)))
+        cache.write_text(json.dumps([w.__dict__ for w in words], ensure_ascii=False, indent=1), encoding="utf-8")
+        self.log(f"{len(words)} palabras detectadas.")
+        return words
+
+    # 4 ------------------------------------------------------------------
+    def detect_key(self, inst: Path):
+        import librosa
+
+        y, sr = librosa.load(str(inst), sr=22050, mono=True, duration=240)
+        tonic, minor, conf = music.detect_key(y, sr)
+        self.key = (tonic, minor)
+        self.log(f"Tonalidad detectada: {music.key_name(tonic, minor)} (confianza {conf:.2f})")
+        return tonic, minor
+
+    def transpose(self, inst: Path) -> Path:
+        st = self.o.semitones
+        if st == 0:
+            return inst
+        self.log("Transponiendo: " + music.transpose_label(*self.key, st))
+        import soundfile as sf
+
+        y, sr = sf.read(str(inst), dtype="float32", always_2d=True)
+        shifted = music.pitch_shift(y.T, sr, st).T
+        peak = np.abs(shifted).max()
+        if peak > 0.99:
+            shifted *= 0.99 / peak
+        out = self.work / f"instrumental_{st:+d}.wav"
+        sf.write(str(out), shifted, sr)
+        return out
+
+    # 5 ------------------------------------------------------------------
+    def palette(self):
+        seed = int(hashlib.md5(self.name.encode("utf-8")).hexdigest(), 16) % (2**32)
+        rnd = random.Random(seed)
+        hue = rnd.random()
+        return rnd, hue
+
+    def make_background(self) -> Path:
+        """Fondo único generado a partir del nombre de la canción."""
+        from PIL import Image, ImageDraw, ImageFilter
+        import colorsys
+
+        rnd, hue = self.palette()
+        W, H = self.o.width, self.o.height
+
+        def rgb(h, s, v):
+            return tuple(int(c * 255) for c in colorsys.hsv_to_rgb(h % 1, s, v))
+
+        c1, c2 = np.array(rgb(hue, 0.8, 0.35)), np.array(rgb(hue + 0.15 + rnd.random() * 0.3, 0.9, 0.12))
+        yy, xx = np.mgrid[0:H, 0:W]
+        ang = rnd.random() * np.pi
+        t = (np.cos(ang) * xx / W + np.sin(ang) * yy / H)
+        t = (t - t.min()) / (t.max() - t.min())
+        img = (c1 * (1 - t[..., None]) + c2 * t[..., None]).astype(np.uint8)
+        im = Image.fromarray(img, "RGB")
+        layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        d = ImageDraw.Draw(layer)
+        for _ in range(rnd.randint(14, 26)):
+            r = rnd.randint(H // 20, H // 4)
+            x, y = rnd.randint(-r, W), rnd.randint(-r, H)
+            col = rgb(hue + rnd.uniform(-0.2, 0.4), rnd.uniform(0.4, 0.9), rnd.uniform(0.5, 1.0))
+            d.ellipse([x, y, x + r * 2, y + r * 2], fill=col + (rnd.randint(20, 60),))
+        layer = layer.filter(ImageFilter.GaussianBlur(H // 60))
+        im = Image.alpha_composite(im.convert("RGBA"), layer).convert("RGB")
+        path = self.work / "fondo.png"
+        im.save(path)
+        return path
+
+    def ass_palette(self):
+        import colorsys
+
+        _, hue = self.palette()
+        r, g, b = (int(c * 255) for c in colorsys.hsv_to_rgb((hue + 0.5) % 1, 0.75, 1.0))
+        return {"sung": f"&H00{b:02X}{g:02X}{r:02X}", "unsung": "&H00FFFFFF", "outline": "&H00101010"}, (r, g, b)
+
+    def render(self, words, audio: Path, suffix: str) -> Path:
+        W, H = self.o.width, self.o.height
+        pal, (r, g, b) = self.ass_palette()
+        title = self.name
+        if self.key:
+            k = self.key
+            title += f"\\NTono: {music.key_name(k[0] + self.o.semitones, k[1])}"
+            if self.o.semitones:
+                title += f" ({self.o.semitones:+d})"
+        (self.work / "karaoke.ass").write_text(build_ass(words, title, pal, W, H), encoding="utf-8-sig")
+        out = self.out / f"{self.name}_karaoke{suffix}.mp4"
+        wave_col = f"0x{r:02X}{g:02X}{b:02X}"
+        use_video = self.o.use_source_video and self.src.suffix.lower() in VIDEO_EXT
+        if use_video:
+            self.log("Renderizando vídeo sobre el vídeo original…")
+            vin = ["-i", str(self.src)]
+            base = (f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
+                    f"boxblur=6:1,eq=brightness=-0.25:saturation=0.8,fps=30[bg]")
+        else:
+            self.log("Renderizando vídeo con fondo generado…")
+            bg = self.make_background()
+            vin = ["-loop", "1", "-framerate", "30", "-i", str(bg)]
+            base = "[0:v]format=yuv420p[bg]"
+        fc = (f"{base};[1:a]showwaves=s={W}x{H // 6}:mode=cline:rate=30:colors={wave_col}@0.55,format=rgba[w];"
+              f"[bg][w]overlay=0:H-h-{H // 30}:shortest=1,ass=karaoke.ass,format=yuv420p[v]")
+        run_ffmpeg([*vin, "-i", str(audio.resolve()), "-filter_complex", fc, "-map", "[v]", "-map", "1:a",
+                    "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-c:a", "aac", "-b:a", "192k",
+                    "-shortest", "-movflags", "+faststart", str(out.resolve())], cwd=str(self.work))
+        return out
+
+    def export_audio(self, audio: Path, suffix: str) -> Path:
+        out = self.out / f"{self.name}_pista{suffix}.mp3"
+        run_ffmpeg(["-i", str(audio), "-c:a", "libmp3lame", "-b:a", "320k", str(out)])
+        return out
+
+    # -------------------------------------------------------------------
+    def run(self):
+        steps = 6
+        self.progress(0)
+        wav = self.extract_audio(); self.progress(1 / steps)
+        inst, voc = self.separate(wav); self.progress(2 / steps)
+        words = self.transcribe(voc); self.progress(3 / steps)
+        self.detect_key(inst)
+        track = self.transpose(inst); self.progress(4 / steps)
+        suffix = "" if self.o.semitones == 0 else f"_{music.key_name(self.key[0] + self.o.semitones, self.key[1])}"
+        suffix = suffix.replace("#", "s")
+        mp3 = self.export_audio(track, suffix); self.progress(5 / steps)
+        video = self.render(words, track, suffix); self.progress(1)
+        self.log(f"Listo:\n  Vídeo: {video}\n  Pista: {mp3}")
+        return video, mp3
+
+
+def analyze_key(path: str):
+    """Análisis rápido de tono sobre el archivo original (para la interfaz)."""
+    import soundfile as sf
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        wav = os.path.join(td, "a.wav")
+        run_ffmpeg(["-i", path, "-vn", "-ac", "1", "-ar", "22050", "-t", "240", wav])
+        y, sr = sf.read(wav, dtype="float32")
+        return music.detect_key(y, sr)
