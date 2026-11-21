@@ -18,7 +18,7 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Karaoke Easy")
-        self.geometry("760x620")
+        self.geometry("820x860")
         self.minsize(640, 520)
         self.q = queue.Queue()
         self.key = None
@@ -68,14 +68,30 @@ class App(tk.Tk):
         ttk.Checkbutton(opt, text="Incluir pista con voz guía (activable en cualquier momento desde el reproductor)",
                         variable=self.guide_var).grid(row=2, column=0, columnspan=4, sticky="w", pady=(4, 0))
 
-        self.btn = ttk.Button(f, text="▶  Crear karaoke", command=self.start)
-        self.btn.grid(row=4, column=0, columnspan=3, sticky="ew", **pad)
-        self.bar = ttk.Progressbar(f, maximum=1.0)
-        self.bar.grid(row=5, column=0, columnspan=3, sticky="ew", **pad)
+        ly = ttk.LabelFrame(f, text="Letra (se alinea sola con la voz)", padding=8)
+        ly.grid(row=4, column=0, columnspan=3, sticky="nsew", **pad)
+        ly.columnconfigure(1, weight=1)
+        ly.columnconfigure(3, weight=1)
+        self.artist_var, self.title_var = tk.StringVar(), tk.StringVar()
+        ttk.Label(ly, text="Artista:").grid(row=0, column=0, sticky="w")
+        ttk.Entry(ly, textvariable=self.artist_var).grid(row=0, column=1, sticky="ew", padx=4)
+        ttk.Label(ly, text="Canción:").grid(row=0, column=2, sticky="w")
+        ttk.Entry(ly, textvariable=self.title_var).grid(row=0, column=3, sticky="ew", padx=4)
+        ttk.Button(ly, text="Buscar letra", command=self.find_lyrics).grid(row=0, column=4, padx=4)
+        self.lyrics_box = tk.Text(ly, height=8, wrap="word", undo=True)
+        self.lyrics_box.grid(row=1, column=0, columnspan=5, sticky="nsew", pady=(6, 0))
+        ttk.Label(ly, foreground="#666", text="Vacío = se busca automáticamente en LRCLIB y, si no está, se usa la "
+                  "transcripción de la IA. Puede pegar o corregir la letra aquí.").grid(row=2, column=0, columnspan=5, sticky="w")
 
-        self.logbox = tk.Text(f, height=12, state="disabled", wrap="word")
-        self.logbox.grid(row=6, column=0, columnspan=3, sticky="nsew", **pad)
-        f.rowconfigure(6, weight=1)
+        self.btn = ttk.Button(f, text="▶  Crear karaoke", command=self.start)
+        self.btn.grid(row=7, column=0, columnspan=3, sticky="ew", **pad)
+        self.bar = ttk.Progressbar(f, maximum=1.0)
+        self.bar.grid(row=8, column=0, columnspan=3, sticky="ew", **pad)
+
+        self.logbox = tk.Text(f, height=7, state="disabled", wrap="word")
+        self.logbox.grid(row=9, column=0, columnspan=3, sticky="nsew", **pad)
+        f.rowconfigure(4, weight=2)
+        f.rowconfigure(9, weight=1)
         self.update_target()
         self.after(100, self.poll)
 
@@ -84,6 +100,11 @@ class App(tk.Tk):
         p = filedialog.askopenfilename(filetypes=FILETYPES)
         if p:
             self.in_var.set(p)
+            from .lyrics import guess_artist_title
+            a, t = guess_artist_title(Path(p).stem)
+            self.artist_var.set(a)
+            self.title_var.set(t)
+            self.lyrics_box.delete("1.0", "end")
             self.key = None
             self.key_var.set("Tono original: (sin analizar)")
             self.update_target()
@@ -121,6 +142,9 @@ class App(tk.Tk):
                     self.key = val[:2]
                     self.key_var.set(f"Tono original: {music.key_name(*self.key)}  (confianza {val[2]:.2f})")
                     self.update_target()
+                elif kind == "lyrics":
+                    self.lyrics_box.delete("1.0", "end")
+                    self.lyrics_box.insert("1.0", val)
                 elif kind == "done":
                     self.busy = False
                     self.btn.configure(state="normal")
@@ -156,6 +180,21 @@ class App(tk.Tk):
             self.log(f"Tono detectado: {music.key_name(k[0], k[1])}")
         self._thread(job)
 
+    def find_lyrics(self):
+        if not self.title_var.get().strip():
+            return messagebox.showwarning("Karaoke Easy", "Escriba el nombre de la canción.")
+        self.log("Buscando letra en LRCLIB…")
+
+        def job():
+            from . import lyrics
+            r = lyrics.search(self.artist_var.get().strip(), self.title_var.get().strip())
+            if not r:
+                self.log("No se encontró la letra. Puede pegarla en el cuadro.")
+                return
+            self.log(f"Letra encontrada: {r.get('artistName')} - {r.get('trackName')} ({r.get('albumName')})")
+            self.q.put(("lyrics", r.get("syncedLyrics") or r.get("plainLyrics")))
+        self._thread(job)
+
     def start(self):
         if self.busy:
             return
@@ -166,7 +205,8 @@ class App(tk.Tk):
 
         opts = Options(input_path=path, output_dir=self.out_var.get(), semitones=int(self.st_var.get()),
                        whisper_model=self.model_var.get(), language=LANGS[self.lang_var.get()],
-                       use_source_video=self.video_var.get(), guide_track=self.guide_var.get())
+                       use_source_video=self.video_var.get(), guide_track=self.guide_var.get(),
+                       lyrics_text=self.lyrics_box.get("1.0", "end").strip() or None)
         self.busy = True
         self.btn.configure(state="disabled")
 

@@ -35,7 +35,7 @@ Opcional: `build_exe.bat` crea `dist\KaraokeEasy\KaraokeEasy.exe` con PyInstalle
 5. **Crear karaoke**. Los resultados quedan en `<salida>\<canción>_karaoke\`.
 
 ### Corregir la letra
-Si Whisper se equivoca, edite `_trabajo\letra.json` (texto y tiempos) y vuelva a pulsar *Crear karaoke*: reutiliza la separación y la letra, y solo regenera el vídeo (también sirve para sacar otras versiones de tono rápido).
+La letra correcta se obtiene de [LRCLIB](https://lrclib.net) (o se pega en el cuadro *Letra*) y se alinea con la voz usando los tiempos de Whisper. Para ajustar tiempos a mano, copie `_trabajo\letra.json` a `_trabajo\letra_manual.json`, edítelo y vuelva a pulsar *Crear karaoke*: reutiliza la separación y la letra, y solo regenera el vídeo (también sirve para sacar otras versiones de tono rápido).
 
 ### Línea de comandos
 ```

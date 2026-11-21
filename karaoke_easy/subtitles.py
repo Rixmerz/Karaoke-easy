@@ -22,9 +22,16 @@ def _esc(s: str) -> str:
     return s.replace("\\", "").replace("{", "(").replace("}", ")").replace("\n", " ")
 
 
-def group_lines(words, max_chars=32, max_gap=1.2):
+def group_lines(words, max_chars=42, max_gap=1.2):
     lines, cur = [], []
     for w in words:
+        forced = w.text.startswith("\n")
+        if forced:
+            w = Word(w.text[1:], w.start, w.end)
+        if cur and forced:
+            # Línea de la letra original: respetarla (partirla solo si es muy larga)
+            lines.append(cur)
+            cur = []
         if cur:
             length = sum(len(x.text) + 1 for x in cur) + len(w.text)
             if length > max_chars or w.start - cur[-1].end > max_gap:

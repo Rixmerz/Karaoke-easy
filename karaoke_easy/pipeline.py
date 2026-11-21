@@ -29,7 +29,9 @@ class Options:
     width: int = 1920
     height: int = 1080
     device: str = "auto"  # auto | cpu | cuda
-    guide_track: bool = True  # añade pista de audio alternativa con la voz
+    guide_track: bool = True
+    lyrics_text: str | None = None  # letra correcta (LRC o texto plano); None = solo Whisper
+    auto_lyrics: bool = True  # buscar la letra en LRCLIB si no se entrega  # añade pista de audio alternativa con la voz
 
 
 def ffmpeg_exe() -> str:
@@ -108,9 +110,50 @@ class KaraokeBuilder:
 
     # 3 ------------------------------------------------------------------
     def transcribe(self, vocals: Path):
-        cache = self.work / "letra.json"
+        manual = self.work / "letra_manual.json"
+        if manual.exists():
+            self.log("Usando letra_manual.json (tiempos editados a mano).")
+            return [Word(**w) for w in json.loads(manual.read_text(encoding="utf-8"))]
+        asr = self._whisper(vocals)
+        lines = self.get_lyrics()
+        if not lines:
+            words = asr
+        else:
+            from .lyrics import align
+
+            words = align(lines, asr)
+            self.log(f"Letra alineada con el audio: {len(lines)} líneas, {len(words)} palabras.")
+        (self.work / "letra.json").write_text(json.dumps([w.__dict__ for w in words], ensure_ascii=False, indent=1),
+                                              encoding="utf-8")
+        return words
+
+    def get_lyrics(self):
+        from . import lyrics
+
+        text = self.o.lyrics_text
+        if not text and self.o.auto_lyrics:
+            artist, title = lyrics.guess_artist_title(self.src.stem)
+            try:
+                import soundfile as sf
+
+                dur = sf.info(str(self.work / "original.wav")).duration
+                r = lyrics.search(artist, title, dur)
+            except Exception as e:  # sin internet, etc.
+                self.log(f"No se pudo buscar la letra en LRCLIB ({e}); se usa la transcripción de Whisper.")
+                r = None
+            if r:
+                self.log(f"Letra encontrada en LRCLIB: {r.get('artistName')} - {r.get('trackName')}")
+                text = r.get("syncedLyrics") or r.get("plainLyrics")
+            else:
+                self.log("Letra no encontrada en LRCLIB; se usa la transcripción de Whisper.")
+        if text:
+            (self.work / "letra_original.txt").write_text(text, encoding="utf-8")
+        return lyrics.parse_lyrics(text) if text else None
+
+    def _whisper(self, vocals: Path):
+        cache = self.work / "whisper.json"
         if cache.exists():
-            self.log("Letra ya transcrita, reutilizando (edite letra.json para corregir).")
+            self.log("Transcripción de Whisper ya existente, reutilizando.")
             return [Word(**w) for w in json.loads(cache.read_text(encoding="utf-8"))]
         self.log(f"Transcribiendo la letra con Whisper ({self.o.whisper_model})…")
         from faster_whisper import WhisperModel
