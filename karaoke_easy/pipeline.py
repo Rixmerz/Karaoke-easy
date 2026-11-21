@@ -119,7 +119,10 @@ class KaraokeBuilder:
         local = paths.whisper_dir(self.o.whisper_model)
         src = str(local) if (local / "model.bin").exists() else self.o.whisper_model
         model = WhisperModel(src, device=self.device, compute_type=ctype)
-        segments, info = model.transcribe(str(vocals), language=self.o.language, word_timestamps=True,
+        import librosa
+
+        audio, _ = librosa.load(str(vocals), sr=16000, mono=True)  # evita depender de PyAV
+        segments, info = model.transcribe(audio, language=self.o.language, word_timestamps=True,
                                           vad_filter=True, beam_size=5,
                                           condition_on_previous_text=False)
         self.log(f"Idioma detectado: {info.language}")
