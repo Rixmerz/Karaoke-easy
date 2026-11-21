@@ -13,7 +13,8 @@ def selftest(path):
         from karaoke_easy.pipeline import KaraokeBuilder, Options
 
         print("Modelos incluidos:", paths.bundled_whisper_models(), "en", paths.MODELS_DIR)
-        b = KaraokeBuilder(Options(path, os.environ.get("KARAOKE_OUT", "."), semitones=-2, whisper_model="small", width=640, height=360),
+        b = KaraokeBuilder(Options(path, os.environ.get("KARAOKE_OUT", "."), semitones=-2, whisper_model="small", width=640, height=360,
+                                   lyrics_text=os.environ.get("KARAOKE_LYRICS") or None),
                            log=lambda m: print(m, flush=True))
         video, mp3 = b.run()
         words = " ".join(w.text for w in b.words).lower()
@@ -24,6 +25,9 @@ def selftest(path):
         assert video.stat().st_size > 50_000, "vídeo vacío"
         assert mp3.exists() and (video.parent / mp3.name.replace("_pista", "_con_voz")).exists(), "faltan MP3"
         assert not expect or len(found) >= len(expect) // 2, "la transcripción no reconoce la letra"
+        if os.environ.get("KARAOKE_LYRICS"):
+            assert b.aligned_lines > 0, "la alineación forzada (MMS_FA) no refinó ningún verso"
+            print(f"MMS_FA refinó {b.aligned_lines} versos")
         print("SELFTEST OK")
         return 0
     except Exception:

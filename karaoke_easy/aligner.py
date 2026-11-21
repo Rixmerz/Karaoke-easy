@@ -170,5 +170,6 @@ def align_lines(vocals_16k: np.ndarray, line_words, windows, device="cpu", log=p
         out += new
         prev_end = new[-1].end
         refined += 1
+    align_lines.last_refined = refined
     log(f"Alineación forzada (MMS_FA): {refined}/{len(line_words)} versos refinados.")
     return out

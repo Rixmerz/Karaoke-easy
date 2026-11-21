@@ -71,6 +71,7 @@ class KaraokeBuilder:
         self.device = _device(opts.device)
         self.key = None
         self.rhythm = None
+        self.aligned_lines = 0
         paths.setup_offline()
 
     # 1 ------------------------------------------------------------------
@@ -164,7 +165,9 @@ class KaraokeBuilder:
             wins.append((ln[0].start - 1.5, max(ln[-1].end, nxt) + 1.0))
         audio, _ = librosa.load(str(vocals), sr=aligner.SR, mono=True)
         try:
-            return aligner.align_lines(audio, lines, wins, device=self.device, log=self.log)
+            out = aligner.align_lines(audio, lines, wins, device=self.device, log=self.log)
+            self.aligned_lines = getattr(aligner.align_lines, "last_refined", 0)
+            return out
         except Exception as e:
             self.log(f"Alineación forzada falló ({e}); se mantiene la sincronización aproximada.")
             return words
