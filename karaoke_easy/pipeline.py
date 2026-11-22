@@ -31,7 +31,9 @@ class Options:
     device: str = "auto"  # auto | cpu | cuda
     guide_track: bool = True
     lyrics_text: str | None = None  # letra correcta (LRC o texto plano); None = solo Whisper
-    auto_lyrics: bool = True  # buscar la letra en LRCLIB si no se entrega  # añade pista de audio alternativa con la voz
+    auto_lyrics: bool = True
+    artist_hint: str = ""  # artista/título para buscar la letra (p. ej. desde los datos del enlace)
+    title_hint: str = ""  # buscar la letra en LRCLIB si no se entrega  # añade pista de audio alternativa con la voz
 
 
 def ffmpeg_exe() -> str:
@@ -60,6 +62,15 @@ def _device(pref):
 
 class KaraokeBuilder:
     def __init__(self, opts: Options, log=print, progress=lambda p: None):
+        from .downloader import download, is_url
+
+        if is_url(opts.input_path):
+            dl_dir = Path(opts.output_dir) / "descargas"
+            path, artist, title = download(opts.input_path, dl_dir, want_video=opts.use_source_video,
+                                           log=log, progress=progress)
+            opts.input_path = str(path)
+            opts.artist_hint = opts.artist_hint or artist
+            opts.title_hint = opts.title_hint or title
         self.o = opts
         self.log = log
         self.progress = progress
@@ -178,6 +189,8 @@ class KaraokeBuilder:
         text = self.o.lyrics_text
         if not text and self.o.auto_lyrics:
             artist, title = lyrics.guess_artist_title(self.src.stem)
+            if self.o.title_hint:
+                artist, title = self.o.artist_hint or artist, self.o.title_hint
             try:
                 import soundfile as sf
 

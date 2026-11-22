@@ -39,7 +39,7 @@ class App(tk.Tk):
         f.pack(fill="both", expand=True)
         f.columnconfigure(1, weight=1)
 
-        ttk.Label(f, text="Archivo (MP4 / MP3 / WAV):").grid(row=0, column=0, sticky="w", **pad)
+        ttk.Label(f, text="Archivo o enlace (YouTube…):").grid(row=0, column=0, sticky="w", **pad)
         ttk.Entry(f, textvariable=self.in_var).grid(row=0, column=1, sticky="ew", **pad)
         ttk.Button(f, text="Buscar…", command=self.pick_in).grid(row=0, column=2, **pad)
 
@@ -142,6 +142,12 @@ class App(tk.Tk):
                     self.key = val[:2]
                     self.key_var.set(f"Tono original: {music.key_name(*self.key)}  (confianza {val[2]:.2f})")
                     self.update_target()
+                elif kind == "downloaded":
+                    p, a, t = val
+                    self.in_var.set(p)
+                    if not self.title_var.get().strip():
+                        self.artist_var.set(a)
+                        self.title_var.set(t)
                 elif kind == "lyrics":
                     self.lyrics_box.delete("1.0", "end")
                     self.lyrics_box.insert("1.0", val)
@@ -167,8 +173,31 @@ class App(tk.Tk):
                 self.q.put(("error", str(e)))
         threading.Thread(target=wrap, daemon=True).start()
 
+    def resolve_input(self):
+        """Si la entrada es un enlace, lo descarga (en el hilo de trabajo) y devuelve la ruta local."""
+        from .downloader import download, is_url
+
+        src = self.in_var.get().strip()
+        if not is_url(src):
+            return src, "", ""
+        out = Path(self.out_var.get()) / "descargas"
+        path, artist, title = download(src, out, want_video=self.video_var.get(), log=self.log,
+                                       progress=lambda p: self.q.put(("prog", p)))
+        self.q.put(("downloaded", (str(path), artist, title)))
+        return str(path), artist, title
+
     def analyze(self):
+        from .downloader import is_url
         path = self.in_var.get()
+        if is_url(path):
+            self.log("Descargando para analizar el tono…")
+
+            def job_url():
+                from .pipeline import analyze_key
+                k = analyze_key(self.resolve_input()[0])
+                self.q.put(("key", k))
+                self.log(f"Tono detectado: {music.key_name(k[0], k[1])}")
+            return self._thread(job_url)
         if not Path(path).is_file():
             return messagebox.showwarning("Karaoke Easy", "Seleccione un archivo primero.")
         self.log("Analizando tonalidad…")
@@ -198,9 +227,10 @@ class App(tk.Tk):
     def start(self):
         if self.busy:
             return
-        path = self.in_var.get()
-        if not Path(path).is_file():
-            return messagebox.showwarning("Karaoke Easy", "Seleccione un archivo MP4, MP3 o WAV.")
+        from .downloader import is_url
+        path = self.in_var.get().strip()
+        if not is_url(path) and not Path(path).is_file():
+            return messagebox.showwarning("Karaoke Easy", "Seleccione un archivo MP4, MP3 o WAV, o pegue un enlace.")
         from .pipeline import KaraokeBuilder, Options
 
         opts = Options(input_path=path, output_dir=self.out_var.get(), semitones=int(self.st_var.get()),
@@ -211,6 +241,9 @@ class App(tk.Tk):
         self.btn.configure(state="disabled")
 
         def job():
+            opts.input_path, opts.artist_hint, opts.title_hint = self.resolve_input()
+            if self.title_var.get().strip() and not opts.title_hint:
+                opts.artist_hint, opts.title_hint = self.artist_var.get().strip(), self.title_var.get().strip()
             b = KaraokeBuilder(opts, log=self.log, progress=lambda p: self.q.put(("prog", p)))
             video, mp3 = b.run()
             self.q.put(("key", (*b.key, 1.0)))

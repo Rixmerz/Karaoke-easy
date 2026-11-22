@@ -6,3 +6,5 @@ numpy<2.1
 Pillow>=10.0
 imageio-ffmpeg>=0.5.1
 torchaudio
+yt-dlp[default]>=2026.10.26
+deno>=2.5

@@ -1,6 +1,6 @@
 # Karaoke Easy 🎤
 
-Programa para Windows que convierte una canción (**MP4, MP3, WAV**, también M4A/FLAC/MKV/MOV) en:
+Programa para Windows que convierte una canción (**MP4, MP3, WAV**, también M4A/FLAC/MKV/MOV, o **un enlace de YouTube** u otro sitio compatible con yt-dlp) en:
 
 1. **Vídeo karaoke único** (MP4 1080p): letra sincronizada palabra por palabra con relleno de color, fondo generado a partir del nombre de la canción (colores/formas distintas para cada tema) o el vídeo original difuminado, y ondas de audio animadas.
 2. **Cuenta atrás con puntitos** (● ● ● ●) que se rellenan en la intro y en pausas largas sin voz, para saber cuándo entrar.
@@ -52,3 +52,6 @@ GitHub Actions (`.github/workflows/windows-installer.yml`) construye en Windows 
 
 ## Pruebas
 `python -m pytest tests` (tonalidades, transposición, tiempos karaoke, cuenta atrás, render con 2 pistas). En CI además se ejecuta el `.exe` empaquetado sin internet sobre una canción de prueba con voz sintética de Windows y se verifica que separe, transcriba y genere los archivos.
+
+## Desde un enlace
+Pegue el enlace (YouTube u otro sitio compatible con [yt-dlp](https://github.com/yt-dlp/yt-dlp)) en el campo *Archivo o enlace* y pulse **Crear karaoke**: se descarga en `<salida>\descargas\` y se procesa igual que un archivo. El artista y el título del vídeo se usan para buscar la letra. Descargue solo contenido sobre el que tenga derechos o permiso.

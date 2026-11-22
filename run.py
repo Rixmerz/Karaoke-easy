@@ -13,6 +13,9 @@ def selftest(path):
         from karaoke_easy.pipeline import KaraokeBuilder, Options
 
         print("Modelos incluidos:", paths.bundled_whisper_models(), "en", paths.MODELS_DIR)
+        from karaoke_easy.downloader import deno_path
+        print("Deno (para YouTube):", deno_path())
+        assert deno_path(), "falta Deno en el paquete"
         b = KaraokeBuilder(Options(path, os.environ.get("KARAOKE_OUT", "."), semitones=-2, whisper_model="small", width=640, height=360,
                                    lyrics_text=os.environ.get("KARAOKE_LYRICS") or None),
                            log=lambda m: print(m, flush=True))
