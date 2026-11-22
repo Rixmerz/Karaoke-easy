@@ -1,8 +1,8 @@
 # -*- mode: python -*-
 from PyInstaller.utils.hooks import collect_all, collect_data_files
 
-datas, binaries, hidden = [("models", "models"), ("VERSION", "."), ("karaoke_easy/player", "karaoke_easy/player")], [], []
-for pkg in ["demucs", "faster_whisper", "ctranslate2", "imageio_ffmpeg", "soxr", "onnxruntime", "julius", "openunmix", "torchaudio", "yt_dlp", "yt_dlp_ejs", "deno", "webview", "clr_loader", "pythonnet"]:
+datas, binaries, hidden = [("models", "models"), ("VERSION", "."), ("ui", "ui")], [], []
+for pkg in ["demucs", "faster_whisper", "ctranslate2", "imageio_ffmpeg", "soxr", "onnxruntime", "julius", "openunmix", "torchaudio", "yt_dlp", "yt_dlp_ejs", "deno"]:
     try:
         d, b, h = collect_all(pkg)
         datas += d; binaries += b; hidden += h
@@ -18,5 +18,6 @@ hidden += ["sklearn.utils._typedefs", "sklearn.neighbors._partition_nodes", "sci
 a = Analysis(["run.py"], pathex=["."], binaries=binaries, datas=datas, hiddenimports=hidden,
              excludes=["matplotlib", "IPython", "tensorboard", "torchvision"], noarchive=False)
 pyz = PYZ(a.pure)
-exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="KaraokeEasy", console=False, upx=False)
-coll = COLLECT(exe, a.binaries, a.datas, upx=False, name="KaraokeEasy")
+# Motor sin ventana propia: la app Tauri lo lanza con CREATE_NO_WINDOW y lee su salida
+exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="KaraokeEngine", console=True, upx=False)
+coll = COLLECT(exe, a.binaries, a.datas, upx=False, name="KaraokeEngine")

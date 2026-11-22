@@ -43,6 +43,14 @@ def selftest(path):
 
 
 if __name__ == "__main__":
+    import multiprocessing as _mp
+
+    _mp.freeze_support()  # necesario para los procesos de trabajo en el .exe
+    if "--serve" in sys.argv:
+        from karaoke_easy.engine import main as engine_main
+
+        engine_main(sys.argv[1:])
+        sys.exit(0)
     if "--player" in sys.argv:
         import multiprocessing
 

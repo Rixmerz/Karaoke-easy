@@ -1,5 +1,21 @@
 # Karaoke Easy 🎤
 
+> **v2**: app de escritorio nueva en **Tauri 2 (Rust)** — Biblioteca como pantalla de inicio, arrastrar y soltar, cola de canciones con pasos y tiempo restante, ajustes y reproductor integrado.
+
+## Arquitectura (v2)
+```
+KaraokeEasy.exe  (Tauri 2 · Rust · interfaz en ui/ sobre WebView2)
+   │  lanza sin ventana y conecta por http://127.0.0.1 con token
+   ▼
+engine\KaraokeEngine.exe  (motor Python empaquetado: separación, letra, sincronía, video)
+   └─ cada canción se procesa en un proceso aparte → cancelar es inmediato
+```
+- `ui/` — interfaz (HTML/CSS/JS sin compilación): Biblioteca, Nueva canción, En proceso, Ajustes y Reproductor.
+- `src-tauri/` — app de escritorio en Rust: arranca/cierra el motor, diálogos nativos, arrastrar archivos, notificaciones.
+- `karaoke_easy/engine.py`, `jobs.py`, `server.py` — motor: API local, cola de trabajos con pasos genéricos y tiempo restante.
+- Desarrollo: `python run.py --serve --no-token --port 8765` y abrir http://127.0.0.1:8765 en el navegador; o `KARAOKE_ENGINE_CMD="python run.py" cargo run --manifest-path src-tauri/Cargo.toml`.
+
+
 Programa para Windows que convierte una canción (**MP4, MP3, WAV**, también M4A/FLAC/MKV/MOV, o **un enlace de YouTube** u otro sitio compatible con yt-dlp) en:
 
 1. **Vídeo karaoke único** (MP4 1080p): letra sincronizada palabra por palabra con relleno de color, fondo generado a partir del nombre de la canción (colores/formas distintas para cada tema) o el vídeo original difuminado, y ondas de audio animadas.

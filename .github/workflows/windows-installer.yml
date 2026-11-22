@@ -39,12 +39,21 @@ jobs:
           pip install -r requirements.txt pyinstaller pytest
       - name: Pruebas unitarias
         run: python -m pytest -q tests
-      - name: Prueba de la ventana (abre y cierra la interfaz)
-        run: python -c "from karaoke_easy.app import App; a=App(); a.after(1500, a.destroy); a.mainloop(); print('GUI OK')"
       - name: Descargar modelos (Demucs + Whisper small + MMS_FA)
         run: python tools/download_models.py small
-      - name: PyInstaller
+      - name: Motor (PyInstaller)
         run: pyinstaller --noconfirm KaraokeEasy.spec
+      - name: Caché de Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: App de escritorio (Tauri 2, Rust)
+        shell: pwsh
+        run: |
+          $ver = (Get-Content VERSION).Trim()
+          (Get-Content src-tauri\tauri.conf.json -Raw) -replace '"version": "[^"]+"', "`"version`": `"$ver`"" | Set-Content src-tauri\tauri.conf.json -Encoding utf8
+          cargo build --release --manifest-path src-tauri/Cargo.toml
+          if (-not (Test-Path src-tauri\target\release\KaraokeEasy.exe)) { throw "no se generó KaraokeEasy.exe" }
       - name: Inno Setup
         shell: pwsh
         run: |
@@ -66,6 +75,7 @@ jobs:
           $setup = Get-ChildItem Output\KaraokeEasy-Setup-*.exe | Select-Object -First 1
           Start-Process $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=C:\KE" -Wait
           if (-not (Test-Path C:\KE\KaraokeEasy.exe)) { throw "El instalador no dejó KaraokeEasy.exe" }
+          if (-not (Test-Path C:\KE\engine\KaraokeEngine.exe)) { throw "El instalador no dejó el motor" }
           # Carpeta de instalación de solo lectura (como C:\Program Files para un usuario normal)
           # Solo derechos de escritura (no "W" genérico: incluye SYNCHRONIZE y bloquearía ejecutar)
           icacls C:\KE /deny "*S-1-1-0:(OI)(CI)(WD,AD,WA,WEA,DC)" /T /C /Q | Out-Null
@@ -84,16 +94,21 @@ jobs:
           $env:KARAOKE_EXPECT = "friend sun shining river tonight sing together stars"
           # Sin internet: el proceso no debe descargar nada
           $env:HTTPS_PROXY = "http://127.0.0.1:9"; $env:HTTP_PROXY = "http://127.0.0.1:9"
-          $p = Start-Process C:\KE\KaraokeEasy.exe -Wait -PassThru -NoNewWindow
+          $p = Start-Process C:\KE\engine\KaraokeEngine.exe -Wait -PassThru -NoNewWindow
           Stop-Process $srv.Id -ErrorAction SilentlyContinue
           Get-Content selftest.log
           if ($p.ExitCode -ne 0) { exit 1 }
           Remove-Item Env:HTTPS_PROXY, Env:HTTP_PROXY
           Get-ChildItem -Recurse salida | Select-Object FullName, Length
-          # El reproductor propio (WebView2) debe abrir desde la instalación
-          $pp = Start-Process C:\KE\KaraokeEasy.exe -ArgumentList "--player","--selftest" -Wait -PassThru
-          if ($pp.ExitCode -ne 0) { throw "El reproductor no abrió (código $($pp.ExitCode))" }
-          "Reproductor OK"
+          # La app Tauri instalada debe abrir, arrancar el motor y cargar la biblioteca
+          $env:KARAOKE_UI_SELFTEST = "1"
+          $pp = Start-Process C:\KE\KaraokeEasy.exe -PassThru
+          if (-not $pp.WaitForExit(180000)) { Stop-Process $pp.Id -Force; throw "La app no respondió en 3 minutos" }
+          if ($pp.ExitCode -ne 0) { throw "La app no abrió bien (código $($pp.ExitCode))" }
+          Remove-Item Env:KARAOKE_UI_SELFTEST
+          Start-Sleep 2
+          if (Get-Process KaraokeEngine -ErrorAction SilentlyContinue) { throw "El motor quedó abierto al cerrar la app" }
+          "App de escritorio OK"
       - uses: actions/upload-artifact@v4
         with:
           name: resultado-prueba

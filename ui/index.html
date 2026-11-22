@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Karaoke Easy</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="logo"><div class="mark">🎤</div><span class="lbl">Karaoke Easy</span></div>
+    <nav class="nav">
+      <button data-view="library" class="on"><span class="ico">📚</span><span class="lbl">Biblioteca</span></button>
+      <button data-view="new"><span class="ico">＋</span><span class="lbl">Nueva canción</span></button>
+      <button data-view="jobs"><span class="ico">⏳</span><span class="lbl">En proceso</span><span class="badge" id="jobsBadge" hidden>0</span></button>
+      <button data-view="settings"><span class="ico">⚙️</span><span class="lbl">Ajustes</span></button>
+    </nav>
+    <div class="update" id="updateBox"></div>
+    <div class="foot">Versión <span id="ver">—</span></div>
+  </aside>
+
+  <main>
+    <!-- BIBLIOTECA -->
+    <section class="view on" id="v-library">
+      <div class="head">
+        <div class="grow"><h1>Biblioteca</h1><p class="sub" id="libCount"></p></div>
+        <input class="field search" id="libSearch" placeholder="Buscar canción o artista…">
+        <select class="field" id="libSort"><option value="recent">Recientes</option><option value="title">Título A–Z</option><option value="artist">Artista A–Z</option></select>
+        <button class="btn pri" data-go="new">＋ Nueva canción</button>
+      </div>
+      <div class="grid" id="libGrid"></div>
+      <div class="empty" id="libEmpty" hidden>
+        <div class="big">🎶</div><h2>Tu biblioteca está vacía</h2>
+        <p>Añade una canción (archivo o enlace) y aparecerá aquí lista para cantar.</p>
+        <button class="btn pri" data-go="new">＋ Añadir mi primera canción</button>
+      </div>
+    </section>
+
+    <!-- NUEVA CANCIÓN -->
+    <section class="view" id="v-new">
+      <div class="head"><div class="grow"><h1>Nueva canción</h1><p class="sub">Arrastra archivos, elígelos o pega enlaces. Puedes añadir varias a la vez.</p></div></div>
+      <div class="drop" id="drop">
+        <div class="big">🎵</div>
+        <h2>Arrastra aquí tus canciones</h2>
+        <div class="sub">MP3, MP4, WAV, M4A, FLAC… o <u>haz clic para elegir</u></div>
+      </div>
+      <div class="or">o pega enlaces (uno por línea)</div>
+      <div class="row"><textarea class="field links" id="links" placeholder="https://www.youtube.com/watch?v=…"></textarea></div>
+      <div class="row" style="margin-top:8px"><button class="btn sm" id="addLinks">Añadir enlaces</button><input class="field" id="pathIn" placeholder="…o ruta de archivo" style="flex:1;display:none"></div>
+      <div class="queue" id="queue"></div>
+
+      <details class="adv" id="adv">
+        <summary>Opciones</summary>
+        <div class="opts">
+          <div class="opt"><label>Tono del karaoke</label>
+            <div class="stepper"><button class="btn sm" id="stDown">−</button><span class="v" id="stV">Original</span><button class="btn sm" id="stUp">+</button></div>
+            <div class="sub" style="font-size:12px">También puedes cambiarlo en vivo al cantar.</div></div>
+          <div class="opt"><label>Idioma de la letra</label>
+            <select class="field" id="optLang"><option value="">Automático</option><option value="es">Español</option><option value="en">Inglés</option><option value="pt">Portugués</option><option value="it">Italiano</option><option value="fr">Francés</option><option value="de">Alemán</option></select></div>
+          <div class="opt"><label>Video</label>
+            <label class="switch"><input type="checkbox" id="optVideoBg" checked> Usar el video original de fondo</label>
+            <label class="switch" style="margin-top:8px"><input type="checkbox" id="optGuide" checked> Incluir pista con voz en el MP4</label></div>
+        </div>
+        <div class="opt" id="lyrOpt" style="padding-bottom:16px"><label>Letra (opcional — si la dejas vacía se busca sola)</label>
+          <div class="row"><input class="field" id="lyArtist" placeholder="Artista" style="flex:1"><input class="field" id="lyTitle" placeholder="Canción" style="flex:1"><button class="btn sm" id="lySearch">Buscar letra</button></div>
+          <div class="lyrres" id="lyRes"></div>
+          <textarea class="field lyr" id="lyText" placeholder="…o pega aquí la letra" style="margin-top:8px"></textarea>
+          <div class="sub" style="font-size:12px" id="lyNote">Solo se aplica cuando procesas una sola canción.</div>
+        </div>
+      </details>
+      <div class="cta"><button class="btn ghost" id="clearQ">Vaciar</button><button class="btn pri" id="create" disabled>Crear karaoke</button></div>
+    </section>
+
+    <!-- EN PROCESO -->
+    <section class="view" id="v-jobs">
+      <div class="head"><div class="grow"><h1>En proceso</h1><p class="sub">Puedes seguir usando la app mientras se preparan tus canciones.</p></div>
+        <button class="btn ghost sm" id="clearJobs">Limpiar terminados</button></div>
+      <div class="jobs" id="jobsList"></div>
+      <div class="empty" id="jobsEmpty"><div class="big">✨</div><h2>Nada en proceso</h2><p>Las canciones que añadas aparecerán aquí mientras se preparan.</p>
+        <button class="btn pri" data-go="new">＋ Nueva canción</button></div>
+    </section>
+
+    <!-- AJUSTES -->
+    <section class="view" id="v-settings">
+      <div class="head"><div class="grow"><h1>Ajustes</h1></div></div>
+      <div class="settings">
+        <div class="set"><div class="t">Carpeta de salida<span id="sOutTxt">Donde se guardan los videos y pistas</span></div>
+          <input class="field" id="sOut" style="width:340px"><button class="btn sm" id="sOutPick">Elegir…</button><button class="btn sm" id="sOutOpen">Abrir</button></div>
+        <div class="set"><div class="t">Idioma por defecto de la letra<span>Automático detecta el idioma de cada canción</span></div>
+          <select class="field" id="sLang"><option value="">Automático</option><option value="es">Español</option><option value="en">Inglés</option><option value="pt">Portugués</option><option value="it">Italiano</option><option value="fr">Francés</option><option value="de">Alemán</option></select></div>
+        <div class="set"><div class="t">Calidad del video<span>720p crea archivos más livianos y más rápido</span></div>
+          <select class="field" id="sQuality"><option value="1080">1080p</option><option value="720">720p</option></select></div>
+        <div class="set"><div class="t">Video original de fondo<span>Si la canción es un video, usarlo (desenfocado) como fondo</span></div>
+          <label class="switch"><input type="checkbox" id="sVideoBg"></label></div>
+        <div class="set"><div class="t">Pista con voz en el MP4<span>Segunda pista de audio para reproductores externos</span></div>
+          <label class="switch"><input type="checkbox" id="sGuide"></label></div>
+        <div class="set"><div class="t">Tema<span>Claro u oscuro</span></div>
+          <select class="field" id="sTheme"><option value="dark">Oscuro</option><option value="light">Claro</option></select></div>
+        <div class="set"><div class="t">Acerca de<span id="sAbout">Karaoke Easy</span></div><button class="btn sm" id="sUpd">Buscar actualizaciones</button></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- REPRODUCTOR -->
+<div id="player">
+  <div id="stage"><video id="bgvideo" muted playsinline preload="auto"></video></div>
+  <div id="ptitle"><h1 id="t1"></h1><h2 id="t2"></h2></div>
+  <div id="lyrics"><div id="wait"></div><div id="dots"></div><div class="line" id="L0"></div><div class="line next" id="L1"></div></div>
+  <div id="ptop"><button class="pb" id="back">← Biblioteca</button><span style="flex:1"></span><button class="pb" id="listBtn" title="Lista de versos (L)">☰ Letra</button><button class="pb" id="editBtn" title="Ajustar sincronía (E)">✏️ Ajustar</button><button class="pb" id="fsBtn" title="Pantalla completa (F)">⛶</button></div>
+  <div id="edit">
+    <b>✏️ Ajustar sincronía</b> — se guarda con <kbd>Ctrl</kbd>+<kbd>S</kbd><br>
+    <kbd>,</kbd>/<kbd>.</kbd> mover el verso actual −/+ 50 ms · <kbd>Shift</kbd>+<kbd>,</kbd>/<kbd>.</kbd> toda la letra<br>
+    <kbd>Enter</kbd> “aquí empieza el verso siguiente” (al ritmo)<br>
+    <div style="margin-top:6px"><button class="pb" id="saveBtn">💾 Guardar</button> <button class="pb" id="undoBtn">↶ Deshacer</button> <span id="editInfo"></span></div>
+  </div>
+  <div id="side"><h3 style="margin:0 0 10px">Letra</h3><div id="lineList"></div></div>
+  <div id="pbar">
+    <div id="seekwrap"><div id="marks"></div><div id="ab"></div><input id="seek" type="range" min="0" max="1000" value="0" step="1"></div>
+    <div class="prow">
+      <button class="pb" id="play" title="Reproducir / pausa (Espacio)">▶</button>
+      <span id="time">0:00 / 0:00</span>
+      <div class="grp" title="Volumen de la voz original (V)"><label>🎙️ Voz</label><input id="voice" type="range" min="0" max="100" value="0" style="width:130px"><span class="val" id="voiceV">0 %</span></div>
+      <div class="grp" title="Tono (+ / −)"><label>🎼 Tono</label><button class="pb" id="pDown">−</button><span class="val" id="pitchV">0</span><button class="pb" id="pUp">+</button></div>
+      <div class="grp" title="Velocidad ([ / ])"><label>⏱️ Velocidad</label><button class="pb" id="sDown">−</button><span class="val" id="speedV">100 %</span><button class="pb" id="sUp">+</button></div>
+      <div class="grp" title="Repetir tramo: A inicio, B fin, Esc quita"><label>🔁</label><button class="pb" id="aBtn">A</button><button class="pb" id="bBtn">B</button><button class="pb" id="abClear">✕</button></div>
+      <div class="grp"><label>🔊</label><input id="vol" type="range" min="0" max="100" value="100" style="width:90px"></div>
+    </div>
+    <div id="help">Espacio play/pausa · V voz · ↑↓ volumen de voz · ←→ ±5 s · +/− tono · [ ] velocidad · A/B repetir · F pantalla completa · L letra · E ajustar · Esc salir</div>
+  </div>
+</div>
+<div id="loading"><div class="spin"></div><span id="loadingTxt">Cargando…</span></div>
+<div id="toasts"></div>
+<script src="app.js"></script>
+<script src="player.js"></script>
+</body>
+</html>

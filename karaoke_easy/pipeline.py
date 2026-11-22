@@ -65,8 +65,10 @@ class Cancelled(Exception):
 
 
 class KaraokeBuilder:
-    def __init__(self, opts: Options, log=print, progress=lambda p: None, cancel_event=None):
+    def __init__(self, opts: Options, log=print, progress=lambda p: None, cancel_event=None,
+                 step=lambda key: None):
         self.cancel_event = cancel_event
+        self.step = step  # pasos genéricos para la interfaz: prepare, separate, lyrics, sync, video, finish
         self.package = None
         from .downloader import download, is_url
 
@@ -145,6 +147,7 @@ class KaraokeBuilder:
 
             words = align(lines, asr)
             self.log(f"Letra alineada con el audio: {len(lines)} líneas, {len(words)} palabras.")
+            self.step("sync")
             words = self.refine(words, vocals)
         (self.work / "letra.json").write_text(json.dumps([w.__dict__ for w in words], ensure_ascii=False, indent=1),
                                               encoding="utf-8")
@@ -382,13 +385,18 @@ class KaraokeBuilder:
     def run(self):
         steps = 6
         self.progress(0)
+        self.step("prepare")
         wav = self.extract_audio(); self.progress(1 / steps)
         self.check_cancel()
+        self.step("separate")
         inst, voc = self.separate(wav); self.progress(2 / steps)
         self.check_cancel()
+        self.step("lyrics")
         words = self.transcribe(voc)
+        self.step("sync")
         words = self.fit_rhythm(words, inst, voc); self.progress(3 / steps)
         self.check_cancel()
+        self.step("video")
         self.detect_key(inst)
         track = self.transpose(inst); self.progress(4 / steps)
         self.check_cancel()
@@ -403,6 +411,7 @@ class KaraokeBuilder:
         self.check_cancel()
         video = self.render(words, track, suffix, guide)
         self.check_cancel()
+        self.step("finish")
         self.log("Preparando la canción para el reproductor…")
         from .library import write_package
         self.package = write_package(self, words, inst, voc, run_ffmpeg)

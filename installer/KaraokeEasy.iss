@@ -20,6 +20,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 UninstallDisplayIcon={app}\KaraokeEasy.exe
+SetupIconFile=..\src-tauri\icons\icon.ico
 PrivilegesRequiredOverridesAllowed=dialog
 
 [Languages]
@@ -30,7 +31,12 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "..\dist\KaraokeEasy\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\src-tauri\target\release\KaraokeEasy.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\KaraokeEngine\*"; DestDir: "{app}\engine"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[InstallDelete]
+; versiones 1.x: el motor estaba en la raíz de la app
+Type: filesandordirs; Name: "{app}\_internal"
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\KaraokeEasy.exe"

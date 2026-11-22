@@ -10,7 +10,15 @@ from pathlib import Path
 
 from . import library, music
 
-STATIC = Path(__file__).resolve().parent / "player"
+def _static_dir():
+    from . import paths
+    for c in (paths.app_dir() / "ui", Path(__file__).resolve().parent.parent / "ui"):
+        if (c / "index.html").exists():
+            return c
+    return Path(__file__).resolve().parent / "player"
+
+
+STATIC = _static_dir()
 _pitch_lock = threading.Lock()
 
 
@@ -19,7 +27,13 @@ class Songs:
         self.extra_dirs = list(extra_dirs)
 
     def all(self):
-        return library.list_songs(self.extra_dirs)
+        from . import settings
+        dirs = list(self.extra_dirs)
+        try:
+            dirs.append(settings.load()["output_dir"])
+        except Exception:
+            pass
+        return library.list_songs([d for d in dirs if d and Path(d).exists()])
 
     def folder(self, sid):
         for s in self.all():
@@ -52,10 +66,31 @@ def render_pitch(folder: Path, st: int, run_ffmpeg):
     return out
 
 
-def make_handler(songs: Songs, run_ffmpeg):
+def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a):
             pass
+
+        def end_headers(self):
+            # La interfaz Tauri se sirve desde otro origen (tauri.localhost): permitir CORS.
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Token, Range")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
+            super().end_headers()
+
+        def do_OPTIONS(self):
+            self.send_response(204)
+            self.end_headers()
+
+        def _authorized(self, q):
+            if not token:
+                return True
+            return self.headers.get("X-Token") == token or q.get("t", [""])[0] == token
+
+        def _body(self):
+            n = int(self.headers.get("Content-Length", "0") or 0)
+            return json.loads(self.rfile.read(n).decode("utf-8")) if n else {}
 
         def _json(self, obj, code=200):
             b = json.dumps(obj, ensure_ascii=False).encode("utf-8")
@@ -113,11 +148,21 @@ def make_handler(songs: Songs, run_ffmpeg):
             u = urllib.parse.urlparse(self.path)
             q = urllib.parse.parse_qs(u.query)
             parts = [urllib.parse.unquote(p) for p in u.path.split("/") if p]
+            if parts and parts[0] in ("api", "media") and not self._authorized(q):
+                return self.send_error(401)
             try:
+                if parts[:2] == ["api", "jobs"] and jobs is not None:
+                    return self._json(jobs.list())
+                if parts[:2] == ["api", "settings"]:
+                    from . import settings
+                    return self._json(settings.load())
+                if parts[:2] == ["api", "version"]:
+                    from . import paths
+                    return self._json({"version": paths.app_version()})
                 if not parts:
                     return self._file(STATIC / "index.html")
-                if parts[0] == "static" and len(parts) == 2 and "/" not in parts[1] and ".." not in parts[1]:
-                    return self._file(STATIC / parts[1])
+                if len(parts) == 1 and re.fullmatch(r"[\w.-]+\.(css|js|html|png|svg|ico)", parts[0]):
+                    return self._file(STATIC / parts[0])
                 if parts[0] == "api":
                     if parts[1:] == ["library"]:
                         return self._json(songs.all())
@@ -143,7 +188,7 @@ def make_handler(songs: Songs, run_ffmpeg):
                         meta = json.loads((folder / library.SONG).read_text(encoding="utf-8"))
                         return self._file(Path(meta.get("video") or ""))
                     name = parts[2]
-                    if not re.fullmatch(r"(inst|voz)(_[+-]\d+)?\.m4a", name):
+                    if not re.fullmatch(r"(inst|voz)(_[+-]\d+)?\.m4a|cover\.jpg", name):
                         return self.send_error(403)
                     return self._file(folder / name)
                 self.send_error(404)
@@ -156,22 +201,65 @@ def make_handler(songs: Songs, run_ffmpeg):
         def do_POST(self):
             u = urllib.parse.urlparse(self.path)
             q = urllib.parse.parse_qs(u.query)
+            if not self._authorized(q):
+                return self.send_error(401)
+            try:
+                return self._post(u, q)
+            except Exception as e:
+                return self._json({"error": str(e)}, 500)
+
+        def _post(self, u, q):
+            parts = [p for p in u.path.split("/") if p]
+            if parts == ["api", "jobs"] and jobs is not None:
+                body = self._body()
+                from . import settings
+                st = settings.load()
+                out = []
+                for item in body.get("inputs", []):
+                    spec = {"input": item, "output_dir": st["output_dir"], "language": st["language"],
+                            "quality": st["quality"], "guide_track": st["guide_track"],
+                            "use_source_video": st["use_source_video"]}
+                    spec.update({k: v for k, v in body.get("options", {}).items()
+                                 if k in ("semitones", "language", "lyrics", "artist", "title", "guide_track",
+                                          "use_source_video", "quality")})
+                    out.append(jobs.add(spec).public())
+                return self._json(out)
+            if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "cancel" and jobs is not None:
+                return self._json({"ok": jobs.cancel(parts[2])})
+            if parts == ["api", "jobs", "clear"] and jobs is not None:
+                jobs.clear_finished()
+                return self._json({"ok": True})
+            if parts == ["api", "settings"]:
+                from . import settings
+                return self._json(settings.save(self._body()))
+            if parts == ["api", "delete"]:
+                folder = songs.folder(q.get("id", [""])[0])
+                if folder is None:
+                    return self._json({"error": "canción no encontrada"}, 404)
+                library.unregister(folder)
+                return self._json({"ok": True})
+            if parts == ["api", "lyrics_search"]:
+                from . import lyrics
+                b = self._body()
+                res = lyrics.search_all(b.get("artist", ""), b.get("title", ""))
+                return self._json([{"artist": r.get("artistName"), "title": r.get("trackName"),
+                                    "album": r.get("albumName"), "duration": r.get("duration"),
+                                    "synced": bool(r.get("syncedLyrics")),
+                                    "text": r.get("syncedLyrics") or r.get("plainLyrics")} for r in res[:15]])
             if u.path == "/api/save":
                 folder = songs.folder(q.get("id", [""])[0])
                 if folder is None:
                     return self._json({"error": "canción no encontrada"}, 404)
-                n = int(self.headers.get("Content-Length", "0"))
-                body = json.loads(self.rfile.read(n).decode("utf-8"))
-                library.save_lines(folder, body["lines"])
+                library.save_lines(folder, self._body()["lines"])
                 return self._json({"ok": True})
             self.send_error(404)
 
     return H
 
 
-def start(extra_dirs=(), run_ffmpeg=None, port=0):
+def start(extra_dirs=(), run_ffmpeg=None, port=0, token=None, jobs=None):
     if run_ffmpeg is None:
         from .pipeline import run_ffmpeg
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(Songs(extra_dirs), run_ffmpeg))
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(Songs(extra_dirs), run_ffmpeg, token, jobs))
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     return httpd, f"http://127.0.0.1:{httpd.server_address[1]}/"

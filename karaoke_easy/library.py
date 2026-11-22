@@ -31,6 +31,9 @@ def _load_lib():
 
 def register(folder: Path):
     folder = str(Path(folder).resolve())
+    hidden = paths.user_cache() / "ocultas.json"
+    if folder in _hidden():
+        hidden.write_text(json.dumps(sorted(_hidden() - {folder}), ensure_ascii=False), encoding="utf-8")
     lib = [p for p in _load_lib() if p != folder]
     lib.insert(0, folder)
     _lib_file().write_text(json.dumps(lib, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -46,7 +49,7 @@ def list_songs(extra_dirs=()):
     for d in extra_dirs:
         for j in Path(d).glob(f"*_karaoke/{PKG}/{SONG}"):
             folders.append(str(j.parent.resolve()))
-    seen, out = set(), []
+    seen, out = set(_hidden()), []
     for f in folders:
         j = Path(f) / SONG
         if f in seen or not j.exists():
@@ -57,6 +60,7 @@ def list_songs(extra_dirs=()):
         except Exception:
             continue
         out.append({"id": song_id(f), "folder": f, "title": meta.get("title"), "artist": meta.get("artist"),
+                    "cover": (Path(f) / "cover.jpg").exists(), "video": meta.get("video"),
                     "key": meta.get("key_name"), "duration": meta.get("duration"), "created": meta.get("created")})
     return out
 
@@ -108,6 +112,13 @@ def write_package(builder, words, inst: Path, voc: Path, run_ffmpeg):
         from .lyrics import guess_artist_title
         a, t = guess_artist_title(builder.name)
         meta["artist"], meta["title"] = a, t or builder.name
+    if video:  # portada para la biblioteca
+        try:
+            run_ffmpeg(["-ss", f"{dur * 0.3:.1f}", "-i", video, "-frames:v", "1", "-vf", "scale=480:-2",
+                        "-q:v", "4", str(folder / "cover.jpg")])
+            meta["cover"] = True
+        except Exception:
+            pass
     (folder / SONG).write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
     register(folder)
     return folder
@@ -124,3 +135,23 @@ def save_lines(folder: Path, lines):
     if work.exists():
         (work / "letra_manual.json").write_text(
             json.dumps([w.__dict__ for w in lines_to_words(lines)], ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def unregister(folder: Path):
+    folder = str(Path(folder).resolve())
+    lib = [p for p in _load_lib() if p != folder]
+    _lib_file().write_text(json.dumps(lib, ensure_ascii=False, indent=1), encoding="utf-8")
+    hidden = paths.user_cache() / "ocultas.json"
+    try:
+        h = set(json.loads(hidden.read_text(encoding="utf-8")))
+    except Exception:
+        h = set()
+    h.add(folder)
+    hidden.write_text(json.dumps(sorted(h), ensure_ascii=False), encoding="utf-8")
+
+
+def _hidden():
+    try:
+        return set(json.loads((paths.user_cache() / "ocultas.json").read_text(encoding="utf-8")))
+    except Exception:
+        return set()
