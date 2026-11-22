@@ -27,8 +27,10 @@
         <div class="grow"><h1>Biblioteca</h1><p class="sub" id="libCount"></p></div>
         <input class="field search" id="libSearch" placeholder="Buscar canción o artista…">
         <select class="field" id="libSort"><option value="recent">Recientes</option><option value="title">Título A–Z</option><option value="artist">Artista A–Z</option></select>
+        <button class="btn" id="partyBtn" title="Cantar varias canciones seguidas"><i data-icon="party-popper"></i> Modo fiesta</button>
         <button class="btn pri" data-go="new"><i data-icon="plus"></i> Nueva canción</button>
       </div>
+      <div class="tabs" id="libTabs"></div>
       <div class="grid" id="libGrid"></div>
       <div class="empty" id="libEmpty" hidden>
         <div class="big"><i data-icon="music" data-size="56"></i></div><h2>Tu biblioteca está vacía</h2>
@@ -108,7 +110,12 @@
   <div id="stage"><video id="bgvideo" muted playsinline preload="auto"></video></div>
   <div id="ptitle"><h1 id="t1"></h1><h2 id="t2"></h2></div>
   <div id="lyrics"><div id="wait"></div><div id="dots"></div><div class="line" id="L0"></div><div class="line next" id="L1"></div></div>
-  <div id="ptop"><button class="pb" id="back"><i data-icon="arrow-left"></i> Biblioteca</button><span style="flex:1"></span><button class="pb" id="listBtn" title="Lista de versos (L)"><i data-icon="list-music"></i> Letra</button><button class="pb" id="editBtn" title="Ajustar sincronía (E)"><i data-icon="pencil"></i> Ajustar</button><button class="pb" id="fsBtn" title="Pantalla completa (F)"><i data-icon="maximize"></i></button></div>
+  <div id="ptop"><button class="pb" id="back"><i data-icon="arrow-left"></i> Biblioteca</button>
+    <span class="partyTag" id="partyTag" hidden><i data-icon="party-popper" data-size="14"></i> <span id="partyPos"></span></span>
+    <button class="pb" id="partySkip" hidden title="Siguiente canción"><i data-icon="skip-forward"></i></button>
+    <span style="flex:1"></span>
+    <button class="pb" id="styleBtn" title="Estilo de la letra"><i data-icon="type"></i></button>
+    <button class="pb" id="screen2Btn" title="Letra en una segunda pantalla (TV o proyector)"><i data-icon="monitor"></i></button><button class="pb" id="listBtn" title="Lista de versos (L)"><i data-icon="list-music"></i> Letra</button><button class="pb" id="editBtn" title="Ajustar sincronía (E)"><i data-icon="pencil"></i> Ajustar</button><button class="pb" id="fsBtn" title="Pantalla completa (F)"><i data-icon="maximize"></i></button></div>
   <div id="edit">
     <b><i data-icon="pencil" data-size="14"></i> Ajustar sincronía</b> — se guarda con <kbd>Ctrl</kbd>+<kbd>S</kbd><br>
     <kbd>,</kbd>/<kbd>.</kbd> mover el verso actual −/+ 50 ms · <kbd>Shift</kbd>+<kbd>,</kbd>/<kbd>.</kbd> toda la letra<br>
@@ -116,6 +123,20 @@
     <div style="margin-top:6px"><button class="pb" id="saveBtn"><i data-icon="save" data-size="14"></i> Guardar</button> <button class="pb" id="undoBtn"><i data-icon="undo-2" data-size="14"></i> Deshacer</button> <span id="editInfo"></span></div>
   </div>
   <div id="side"><h3 style="margin:0 0 10px">Letra</h3><div id="lineList"></div></div>
+  <div id="stylePop" class="pop">
+    <label>Tamaño de la letra</label><input type="range" id="lyrSize" min="70" max="150" value="100">
+    <label>Tipografía</label><select class="field" id="lyrFont">
+      <option value="">Moderna</option><option value="Georgia, 'Times New Roman', serif">Clásica</option>
+      <option value="Bahnschrift, 'Arial Narrow', sans-serif">Condensada</option><option value="'Comic Sans MS', 'Segoe Print', cursive">Divertida</option>
+      <option value="Consolas, 'Courier New', monospace">Máquina de escribir</option></select>
+    <label>Color al cantar</label><div class="swatches" id="lyrColors"></div>
+  </div>
+  <div id="nextUp"><div class="nbox">
+    <div class="sub">Siguiente canción</div><h1 id="nuTitle"></h1><h2 id="nuArtist"></h2>
+    <div class="ring"><span id="nuCount">8</span></div>
+    <div class="row" style="justify-content:center;gap:10px"><button class="btn pri" id="nuGo"><i data-icon="play"></i> Cantar ahora</button>
+      <button class="btn" id="nuSkip"><i data-icon="skip-forward"></i> Saltar</button><button class="btn ghost" id="nuEnd">Terminar fiesta</button></div>
+  </div></div>
   <div id="pbar">
     <div id="seekwrap"><div id="marks"></div><div id="ab"></div><input id="seek" type="range" min="0" max="1000" value="0" step="1"></div>
     <div class="prow">

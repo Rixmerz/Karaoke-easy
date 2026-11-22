@@ -2,14 +2,34 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Permisos de la ventana principal",
-  "windows": ["main"],
+  "windows": [
+    "main",
+    "lyrics"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-set-fullscreen",
     "dialog:default",
     "notification:default",
     "opener:default",
-    { "identifier": "opener:allow-open-path", "allow": [{ "path": "**" }] },
-    { "identifier": "opener:allow-open-url", "allow": [{ "url": "https://github.com/**" }] }
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://github.com/**"
+        }
+      ]
+    },
+    "core:webview:allow-create-webview-window",
+    "core:window:allow-is-fullscreen",
+    "core:window:allow-set-focus"
   ]
 }

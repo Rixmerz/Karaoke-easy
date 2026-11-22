@@ -53,14 +53,75 @@ document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => go(b.dat
 document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => go(b.dataset.go));
 
 // ---------------- biblioteca ----------------
-let LIB = [];
+let LIB = [], LISTS = { favorites: [], playlists: [] }, TAB = "all";
 async function loadLibrary() {
-  try { LIB = await api("library"); } catch (e) { LIB = []; }
+  try { [LIB, LISTS] = await Promise.all([api("library"), api("lists")]); } catch (e) { LIB = LIB || []; }
   renderLibrary();
 }
+const saveLists = async () => { LISTS = await api("lists", LISTS); };
+const isFav = id => LISTS.favorites.includes(id);
+async function toggleFav(id) {
+  LISTS.favorites = isFav(id) ? LISTS.favorites.filter(x => x !== id) : [...LISTS.favorites, id];
+  await saveLists(); renderLibrary();
+}
+function tabSongs(tab) {
+  if (tab === "fav") return LIB.filter(s => isFav(s.id));
+  const pl = LISTS.playlists.find(p => p.id === tab);
+  if (pl) return pl.songs.map(id => LIB.find(s => s.id === id)).filter(Boolean);
+  return LIB;
+}
+function renderTabs() {
+  const T2 = $("libTabs"); if (!LIB.length) { T2.innerHTML = ""; return; }
+  if (TAB !== "all" && TAB !== "fav" && !LISTS.playlists.some(p => p.id === TAB)) TAB = "all";
+  const tabs = [["all", "Todas", "library"], ["fav", `Favoritas (${LISTS.favorites.filter(id => LIB.some(s => s.id === id)).length})`, "heart"],
+    ...LISTS.playlists.map(p => [p.id, `${p.name} (${p.songs.length})`, "list-music"])];
+  T2.innerHTML = tabs.map(([id, name, ic]) => `<button class="tab ${TAB === id ? "on" : ""}" data-tab="${esc(id)}">${icon(ic, 14)} ${esc(name)}</button>`).join("")
+    + `<button class="tab add" id="newList">${icon("list-plus", 14)} Nueva lista</button>`;
+  T2.querySelectorAll("[data-tab]").forEach(b => {
+    b.onclick = () => { TAB = b.dataset.tab; renderLibrary(); };
+    const pl = LISTS.playlists.find(p => p.id === b.dataset.tab);
+    if (pl) b.oncontextmenu = e => { e.preventDefault(); listMenu(e, pl); };
+  });
+  $("newList").onclick = () => newList();
+}
+function newList(addId) {
+  modal("Nueva lista", `<label>Nombre</label><input class="field" id="lName" placeholder="Ej.: Fiesta, Ensayo, Rock en español">`, [
+    { label: "Cancelar" },
+    { label: "Crear", primary: true, onclick: async () => {
+        const name = $("lName").value.trim(); if (!name) return false;
+        const pl = { id: "l" + Date.now().toString(36), name, songs: addId ? [addId] : [] };
+        LISTS.playlists.push(pl); await saveLists(); TAB = addId ? TAB : pl.id; renderLibrary();
+        toast(addId ? `Añadida a “${name}”` : `Lista “${name}” creada`, "ok", 1800); } }]);
+}
+function listMenu(e, pl) {
+  closeMenu();
+  const m = document.createElement("div"); m.className = "menu"; m.id = "menu";
+  m.innerHTML = `<button data-a="party">${icon("party-popper", 15)} Modo fiesta con esta lista</button><button data-a="rename">${icon("pencil", 15)} Renombrar</button><button data-a="del">${icon("trash-2", 15)} Borrar lista</button>`;
+  m.style.left = Math.min(e.clientX, innerWidth - 230) + "px"; m.style.top = e.clientY + "px";
+  m.onclick = async ev => {
+    const a = ev.target.closest("button")?.dataset.a; closeMenu();
+    if (a === "party") startParty(pl.songs.slice(), false);
+    if (a === "rename") modal("Renombrar lista", `<input class="field" id="lName" value="${esc(pl.name)}">`, [{ label: "Cancelar" },
+      { label: "Guardar", primary: true, onclick: async () => { pl.name = $("lName").value.trim() || pl.name; await saveLists(); renderLibrary(); } }]);
+    if (a === "del") modal("Borrar lista", `<p>¿Borrar la lista “${esc(pl.name)}”? Las canciones no se borran.</p>`, [{ label: "Cancelar" },
+      { label: "Borrar", primary: true, onclick: async () => { LISTS.playlists = LISTS.playlists.filter(p => p !== pl); TAB = "all"; await saveLists(); renderLibrary(); } }]);
+  };
+  document.body.appendChild(m); setTimeout(() => document.addEventListener("click", closeMenu, { once: true }), 0);
+}
+function addToList(s) {
+  const pls = LISTS.playlists;
+  modal("Añadir a lista", (pls.length ? `<div class="checks">${pls.map((p, i) => `<label><input type="checkbox" data-i="${i}" ${p.songs.includes(s.id) ? "checked" : ""}> ${esc(p.name)}</label>`).join("")}</div>`
+    : `<p class="sub">Aún no tienes listas.</p>`), [
+    { label: `${icon("list-plus", 15)} Nueva lista`, onclick: () => { setTimeout(() => newList(s.id), 0); } },
+    { label: "Listo", primary: true, onclick: async () => {
+        document.querySelectorAll(".checks input").forEach(c => { const p = pls[+c.dataset.i];
+          const has = p.songs.includes(s.id); if (c.checked && !has) p.songs.push(s.id); if (!c.checked && has) p.songs = p.songs.filter(x => x !== s.id); });
+        await saveLists(); renderLibrary(); } }]);
+}
 function renderLibrary() {
+  renderTabs();
   const q = $("libSearch").value.toLowerCase(), sort = $("libSort").value;
-  let items = LIB.filter(s => ((s.title || "") + " " + (s.artist || "")).toLowerCase().includes(q));
+  let items = tabSongs(TAB).filter(s => ((s.title || "") + " " + (s.artist || "")).toLowerCase().includes(q));
   if (sort === "title") items.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
   if (sort === "artist") items.sort((a, b) => (a.artist || "").localeCompare(b.artist || ""));
   $("libCount").textContent = LIB.length ? `${LIB.length} canción${LIB.length > 1 ? "es" : ""}` : "";
@@ -72,23 +133,27 @@ function renderLibrary() {
       : `background:linear-gradient(135deg,hsl(${h} 70% 45%),hsl(${(h + 60) % 360} 70% 22%))`;
     c.innerHTML = `<div class="cover" style="${bg}">${s.cover ? "" : `<span class="ini">${esc((s.title || "?")[0].toUpperCase())}</span>`}
       <div class="playo"><span>${icon("play", 24)}</span></div></div><button class="more" title="Más opciones">${icon("ellipsis")}</button>
-      <div class="meta"><b>${esc(s.title || "(sin título)")}</b><span>${esc(s.artist || "Artista desconocido")}</span>
+      <div class="meta"><button class="fav ${isFav(s.id) ? "on" : ""}" title="Favorita">${icon("heart", 18)}</button><b>${esc(s.title || "(sin título)")}</b><span>${esc(s.artist || "Artista desconocido")}</span>
       <div class="chips">${s.key ? `<span class="chip">${icon("music-2", 12)} ${esc(s.key)}</span>` : ""}${s.duration ? `<span class="chip">${fmt(s.duration)}</span>` : ""}</div></div>`;
     c.onclick = () => openSong(s.id);
     c.querySelector(".more").onclick = e => { e.stopPropagation(); songMenu(e, s); };
+    c.querySelector(".fav").onclick = e => { e.stopPropagation(); toggleFav(s.id); };
+    c.oncontextmenu = e => { e.preventDefault(); songMenu(e, s); };
     g.appendChild(c);
   }
-  if (LIB.length && !items.length) g.innerHTML = `<p class="sub">Sin resultados para “${esc(q)}”.</p>`;
+  if (LIB.length && !items.length) g.innerHTML = `<p class="sub">${q ? `Sin resultados para “${esc(q)}”.` : TAB === "fav" ? "Marca canciones con el corazón para verlas aquí." : "Esta lista está vacía. Usa ⋯ › Añadir a lista en una canción."}</p>`;
 }
 $("libSearch").oninput = renderLibrary; $("libSort").onchange = renderLibrary;
 function songMenu(e, s) {
   closeMenu();
   const m = document.createElement("div"); m.className = "menu"; m.id = "menu";
-  m.innerHTML = `<button data-a="play">${icon("play", 15)} Cantar</button><button data-a="edit">${icon("pencil", 15)} Editar título y artista</button><button data-a="folder">${icon("folder-open", 15)} Abrir carpeta</button><button data-a="remove">${icon("trash-2", 15)} Quitar de la biblioteca</button>`;
+  m.innerHTML = `<button data-a="play">${icon("play", 15)} Cantar</button><button data-a="fav">${icon("heart", 15)} ${isFav(s.id) ? "Quitar de favoritas" : "Añadir a favoritas"}</button><button data-a="list">${icon("list-plus", 15)} Añadir a lista…</button><button data-a="edit">${icon("pencil", 15)} Editar título y artista</button><button data-a="folder">${icon("folder-open", 15)} Abrir carpeta</button><button data-a="remove">${icon("trash-2", 15)} Quitar de la biblioteca</button>`;
   m.style.left = Math.min(e.clientX, innerWidth - 210) + "px"; m.style.top = e.clientY + "px";
   m.onclick = async ev => {
-    const a = ev.target.dataset.a; closeMenu();
+    const a = ev.target.closest("button")?.dataset.a; closeMenu();
     if (a === "play") openSong(s.id);
+    if (a === "fav") toggleFav(s.id);
+    if (a === "list") addToList(s);
     if (a === "edit") editSong(s);
     if (a === "folder") openPath(s.folder.replace(/[\\/]reproductor$/, ""));
     if (a === "remove") { await api("delete?id=" + s.id, {}); toast("Quitada de la biblioteca (los archivos se conservan)"); loadLibrary(); }
@@ -97,6 +162,28 @@ function songMenu(e, s) {
   setTimeout(() => document.addEventListener("click", closeMenu, { once: true }), 0);
 }
 function closeMenu() { $("menu")?.remove(); }
+
+// ---------------- modo fiesta ----------------
+let PARTY = null;   // {ids:[...], i}
+function startParty(ids, shuffle) {
+  ids = ids.filter(id => LIB.some(s => s.id === id));
+  if (!ids.length) return toast("No hay canciones para el modo fiesta", "err");
+  if (shuffle) for (let i = ids.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [ids[i], ids[j]] = [ids[j], ids[i]]; }
+  PARTY = { ids, i: 0 }; openSong(ids[0]);
+  toast(`Modo fiesta: ${ids.length} canciones`, "ok", 2500);
+}
+$("partyBtn").onclick = () => {
+  const cur = tabSongs(TAB), favs = LIB.filter(s => isFav(s.id));
+  const opts = [["view", `Lo que estoy viendo (${cur.length})`], ["fav", `Favoritas (${favs.length})`], ["all", `Toda la biblioteca (${LIB.length})`]];
+  modal("Modo fiesta", `<p class="sub">Las canciones se reproducen una tras otra, con una pantalla de “Siguiente” entre cada una.</p>
+    <div class="radio">${opts.map(([v, n], i) => `<label class="switch"><input type="radio" name="pq" value="${v}" ${i === 0 ? "checked" : ""} style="width:18px;height:18px;appearance:auto"> ${n}</label>`).join("")}</div>
+    <label class="switch" style="margin-top:14px"><input type="checkbox" id="pShuffle"> Orden aleatorio</label>`, [
+    { label: "Cancelar" },
+    { label: `${icon("party-popper", 15)} Empezar`, primary: true, onclick: () => {
+        const v = document.querySelector("input[name=pq]:checked").value;
+        const list = v === "fav" ? favs : v === "all" ? LIB : cur;
+        startParty(list.map(s => s.id), $("pShuffle").checked); } }]);
+};
 
 async function openPath(p) {
   try {
@@ -295,10 +382,33 @@ async function checkUpdate(manual) {
   } catch (e) { if (manual) toast("No se pudo comprobar (¿sin internet?)", "err"); }
 }
 
+// ---------------- primer arranque ----------------
+function onboarding(step = 0) {
+  const steps = [
+    ["Bienvenido a Karaoke Easy", `<p>Convierte cualquier canción en un karaoke: <b>quita la voz</b>, prepara la <b>letra sincronizada</b> y te deja cantar con <b>el tono que prefieras</b>.</p>
+      <p class="sub">Funciona sin internet (solo lo usa para buscar letras y descargar enlaces).</p>`],
+    ["¿Dónde guardamos tus karaokes?", `<p class="sub">Aquí se guardan los videos, las pistas sin voz y tu biblioteca.</p>
+      <div class="row"><input class="field" id="obOut" style="flex:1" value="${esc($("sOut").value)}"><button class="btn sm" id="obPick">Elegir…</button></div>`],
+    ["Así se canta", `<div class="checks" style="gap:10px">
+      <div>${icon("plus", 16)} <b>Nueva canción</b>: arrastra un archivo o pega un enlace.</div>
+      <div>${icon("mic", 16)} <b>Voz</b>: súbela o bájala en vivo (tecla V).</div>
+      <div>${icon("music-2", 16)} <b>Tono</b>: + y − para cantarla más alta o más baja.</div>
+      <div>${icon("party-popper", 16)} <b>Modo fiesta</b>: varias canciones seguidas.</div>
+      <div>${icon("monitor", 16)} <b>Segunda pantalla</b>: la letra en la TV, los controles en tu PC.</div></div>`]];
+  const [title, body] = steps[step], last = step === steps.length - 1;
+  modal(title, body + `<p class="sub" style="text-align:center;margin-top:16px">${steps.map((_, i) => i === step ? "●" : "○").join(" ")}</p>`, [
+    ...(step ? [{ label: "Atrás", onclick: () => { setTimeout(() => onboarding(step - 1), 0); } }] : [{ label: "Omitir", onclick: () => localStorage.setItem("ke_onboarded", "1") }]),
+    { label: last ? "¡Empezar!" : "Siguiente", primary: true, onclick: async () => {
+        if (step === 1 && $("obOut").value.trim() && $("obOut").value.trim() !== $("sOut").value) { $("sOut").value = $("obOut").value.trim(); await saveSettings(); }
+        if (last) { localStorage.setItem("ke_onboarded", "1"); go("new"); } else setTimeout(() => onboarding(step + 1), 0); } }]);
+  if (step === 1) $("obPick").onclick = async () => { if (!T?.dialog) return; const r = await T.dialog.open({ directory: true }); if (r) $("obOut").value = r; };
+}
+
 // ---------------- arranque ----------------
 function splash(txt) { if (txt) $("splashTxt").textContent = txt; }
 async function boot() {
   applyTheme(); hydrateIcons(); $("play").innerHTML = icon("play", 20);
+  if (new URLSearchParams(location.search).get("view") === "lyrics") { $("splash").remove(); return; }  // segunda pantalla
   if (T?.core) {
     splash("Iniciando el motor…");
     const info = await T.core.invoke("engine_info");          // {url, token, selftest}
@@ -312,6 +422,7 @@ async function boot() {
   splash("Cargando tu biblioteca…");
   await loadLibrary();
   $("splash").classList.add("hide"); setTimeout(() => $("splash").remove(), 400);
+  try { if (!localStorage.getItem("ke_onboarded") && !window.SELFTEST) onboarding(); } catch (e) { }
   pollJobs(); setInterval(pollJobs, 1000);
   setTimeout(() => checkUpdate(false), 4000);
   if (window.SELFTEST && T?.core) {      // prueba automática de la app instalada

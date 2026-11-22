@@ -165,3 +165,21 @@ def edit_meta(folder: Path, title=None, artist=None):
     if artist is not None:
         meta["artist"] = artist
     j.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+
+
+def load_lists():
+    """Favoritos y listas de canciones (ids)."""
+    try:
+        d = json.loads((paths.user_cache() / "listas.json").read_text(encoding="utf-8"))
+        return {"favorites": list(d.get("favorites", [])), "playlists": list(d.get("playlists", []))}
+    except Exception:
+        return {"favorites": [], "playlists": []}
+
+
+def save_lists(d):
+    clean = {"favorites": [str(x) for x in d.get("favorites", [])][:5000],
+             "playlists": [{"id": str(p.get("id")), "name": str(p.get("name", ""))[:80],
+                            "songs": [str(x) for x in p.get("songs", [])][:5000]}
+                           for p in d.get("playlists", [])][:200]}
+    (paths.user_cache() / "listas.json").write_text(json.dumps(clean, ensure_ascii=False, indent=1), encoding="utf-8")
+    return clean

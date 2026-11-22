@@ -156,6 +156,8 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
                 if parts[:2] == ["api", "settings"]:
                     from . import settings
                     return self._json(settings.load())
+                if parts[:2] == ["api", "lists"]:
+                    return self._json(library.load_lists())
                 if parts[:2] == ["api", "version"]:
                     from . import paths
                     return self._json({"version": paths.app_version()})
@@ -232,6 +234,8 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
             if parts == ["api", "settings"]:
                 from . import settings
                 return self._json(settings.save(self._body()))
+            if parts == ["api", "lists"]:
+                return self._json(library.save_lists(self._body()))
             if parts == ["api", "edit"]:
                 folder = songs.folder(q.get("id", [""])[0])
                 if folder is None:
