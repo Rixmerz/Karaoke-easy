@@ -17,12 +17,14 @@ from demucs.pretrained import get_model  # noqa: E402
 
 import shutil  # noqa: E402
 
-get_model("htdemucs")
+DEMUCS_URL = "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/955717e8-8726e21a.th"
 paths.DEMUCS_DIR.mkdir(parents=True, exist_ok=True)
-for th in (paths.TORCH_HOME / "hub" / "checkpoints").glob("955717e8-*.th"):
-    shutil.copy2(th, paths.DEMUCS_DIR / th.name)
+th = paths.DEMUCS_DIR / "955717e8-8726e21a.th"
+if not th.exists():
+    torch_hub_download = __import__("torch").hub.download_url_to_file
+    torch_hub_download(DEMUCS_URL, str(th), hash_prefix="8726e21a")
 (paths.DEMUCS_DIR / "htdemucs.yaml").write_text("models: ['955717e8']\n", encoding="utf-8")
-assert list(paths.DEMUCS_DIR.glob("955717e8-*.th")), "no se encontraron los pesos de htdemucs"
+get_model("htdemucs", repo=paths.DEMUCS_DIR)  # comprueba que carga desde la carpeta incluida
 print("Demucs htdemucs OK ->", paths.DEMUCS_DIR)
 
 import torch  # noqa: E402
