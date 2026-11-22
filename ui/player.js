@@ -34,7 +34,7 @@ async function openSong(id){
   inst.load();voz.load();
   await waitMeta();
   loading(false);seekTo(0);
-  updParty();broadcastSong();
+  updParty();broadcastSong();REF=null;resetScore();$("result").classList.remove("on");if(scoring)loadRef();
   const pr=prefs(id);
   if(pr.voice!=null){$("voice").value=pr.voice;applyVoice()}
   if(pr.speed&&pr.speed!==1){speed=pr.speed;updSpeed()}
@@ -91,7 +91,7 @@ $("abClear").onclick=()=>{A=B=null;drawAB();$("aBtn").classList.remove("on");$("
 async function setFull(on){try{if(T?.window){await T.window.getCurrentWindow().setFullscreen(on)}else if(on)await document.documentElement.requestFullscreen();else if(document.fullscreenElement)await document.exitFullscreen()}catch(e){}}
 let isFull=false;$("fsBtn").onclick=()=>{isFull=!isFull;setFull(isFull)};
 function closePlayer(){if(dirty&&!confirm("Hay cambios de sincronía sin guardar. ¿Salir igualmente?"))return;
-  pause();PARTY=null;$("nextUp").classList.remove("on");clearInterval(nuTimer);isFull=false;setFull(false);$("player").classList.remove("on");editMode=false;$("edit").classList.remove("open");loadLibrary()}
+  recStop();micOff();pause();PARTY=null;$("nextUp").classList.remove("on");clearInterval(nuTimer);isFull=false;setFull(false);$("player").classList.remove("on");editMode=false;$("edit").classList.remove("open");loadLibrary()}
 $("back").onclick=closePlayer;
 $("listBtn").onclick=()=>$("side").classList.toggle("open");
 $("editBtn").onclick=()=>{editMode=!editMode;$("edit").classList.toggle("open",editMode);$("editBtn").classList.toggle("on",editMode);if(editMode)$("side").classList.add("open")};
@@ -144,7 +144,7 @@ function renderLine(el,line,t){
 function frame(){
   requestAnimationFrame(frame);if(!song||!$("player").classList.contains("on"))return;
   const t=REMOTE?remoteTime():inst.currentTime,d=inst.duration||song.duration||1;
-  if(!REMOTE)tick(t);
+  if(!REMOTE){tick(t);scoreFrame(t)}
   if(!REMOTE&&isPlaying()){ // sincronía de voz y vídeo con la pista principal
     if(Math.abs(voz.currentTime-t)>0.06)voz.currentTime=t;
     if(song.has_video&&Math.abs(video.currentTime-t)>0.25)video.currentTime=t;
@@ -181,6 +181,8 @@ let nuTimer=null;
 function updParty(){const on=!!PARTY;$("partyTag").hidden=!on;$("partySkip").hidden=!on||PARTY.i>=PARTY.ids.length-1;
   if(on)$("partyPos").textContent=`Fiesta ${PARTY.i+1}/${PARTY.ids.length}`}
 function onSongEnd(){
+  recStop();
+  if(showResult()&&!PARTY)return;
   if(!PARTY)return;
   if(PARTY.i>=PARTY.ids.length-1){toast("¡Fin del modo fiesta! 🎉","ok",4000);PARTY=null;updParty();return}
   showNext();
@@ -236,3 +238,100 @@ $("screen2Btn").onclick=async()=>{
 if(REMOTE){document.body.classList.add("lyrics-only");$("player").classList.add("on");
   document.addEventListener("dblclick",async()=>{try{if(T?.window){const w=T.window.getCurrentWindow();await w.setFullscreen(!(await w.isFullscreen()))}else if(document.fullscreenElement)document.exitFullscreen();else document.documentElement.requestFullscreen()}catch(e){}});
   chan&&chan.postMessage({type:"hello"})}
+
+// ---------- micrófono con eco ----------
+let mic=null; // {stream, src, gain, wet, an, buf}
+function impulse(sec=2.2,decay=3){const n=ctx.sampleRate*sec,b=ctx.createBuffer(2,n,ctx.sampleRate);
+  for(let c=0;c<2;c++){const d=b.getChannelData(c);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,decay)}return b}
+async function micOn(){
+  setupAudio();if(ctx.state==="suspended")await ctx.resume();
+  const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+  const src=ctx.createMediaStreamSource(stream),gain=ctx.createGain(),dry=ctx.createGain(),wet=ctx.createGain();
+  const conv=ctx.createConvolver();conv.buffer=impulse();
+  const delay=ctx.createDelay(1),fb=ctx.createGain();delay.delayTime.value=0.13;fb.gain.value=0.28;
+  src.connect(gain);gain.connect(dry).connect(gMaster);
+  gain.connect(conv).connect(wet);gain.connect(delay);delay.connect(fb).connect(delay);delay.connect(wet);wet.connect(gMaster);
+  const an=ctx.createAnalyser();an.fftSize=2048;gain.connect(an);
+  mic={stream,src,gain,wet,an,buf:new Float32Array(2048)};applyMic();
+  $("micBtn").classList.add("on");$("micBtn").innerHTML=icon("mic",15)+" Micrófono";
+  toast("Micrófono activo. Usa audífonos para evitar acoples.","ok",3500);
+}
+function micOff(){if(!mic)return;mic.stream.getTracks().forEach(t=>t.stop());try{mic.src.disconnect();mic.gain.disconnect()}catch(e){}mic=null;
+  $("micBtn").classList.remove("on");$("micBtn").innerHTML=icon("mic-off",15)+" Micrófono"}
+function applyMic(){if(!mic)return;mic.gain.gain.value=+$("micVol").value/100;mic.wet.gain.value=+$("echo").value/100*0.9;
+  try{localStorage.setItem("ke_mic",JSON.stringify({vol:$("micVol").value,echo:$("echo").value}))}catch(e){}}
+try{const m=JSON.parse(localStorage.getItem("ke_mic")||"{}");if(m.vol)$("micVol").value=m.vol;if(m.echo)$("echo").value=m.echo}catch(e){}
+$("micVol").oninput=applyMic;$("echo").oninput=applyMic;
+$("micBtn").onclick=async()=>{if(mic)return micOff();try{await micOn()}catch(e){toast("No se pudo usar el micrófono: "+(e.message||e),"err",5000)}};
+
+// ---------- detección de tono y puntuación ----------
+let REF=null,scoring=false,score={hit:0,tot:0},trail=[];
+function detectPitch(){ // autocorrelación: devuelve nota MIDI (float) o null
+  if(!mic)return null;const b=mic.buf;mic.an.getFloatTimeDomainData(b);
+  let rms=0;for(let i=0;i<b.length;i++)rms+=b[i]*b[i];rms=Math.sqrt(rms/b.length);if(rms<0.012)return null;
+  const sr=ctx.sampleRate,minL=Math.floor(sr/1000),maxL=Math.floor(sr/75);let best=-1,bestC=0;
+  for(let L=minL;L<=maxL;L++){let c=0;for(let i=0;i<b.length-L;i+=2)c+=b[i]*b[i+L];if(c>bestC){bestC=c;best=L}}
+  let e=0;for(let i=0;i<b.length;i+=2)e+=b[i]*b[i];if(best<0||bestC/e<0.5)return null;
+  const f=sr/best;return 69+12*Math.log2(f/440);
+}
+function refAt(t){if(!REF)return null;const i=Math.round(t/REF.hop);const v=REF.midi[i];return v==null?null:v+pitch}
+async function loadRef(){REF=null;try{REF=await api("pitchref?id="+song.id)}catch(e){}}
+function resetScore(){score={hit:0,tot:0};trail=[];$("scoreV").textContent="0"}
+$("scoreBtn").onclick=async()=>{
+  scoring=!scoring;$("player").classList.toggle("scoring",scoring);$("scoreBtn").classList.toggle("on",scoring);
+  if(scoring){if(!REF){loading(true,"Preparando la línea de notas…");await loadRef();loading(false)}resetScore();
+    if(!mic){try{await micOn()}catch(e){toast("Activa el micrófono para puntuar","err")}}}
+};
+function scoreFrame(t){
+  if(!scoring||!isPlaying())return;
+  const sung=detectPitch(),ref=refAt(t);
+  if(sung!=null)trail.push([t,sung]);while(trail.length&&trail[0][0]<t-4)trail.shift();
+  // el micrófono llega con retraso (~50-250 ms): comparar con la referencia reciente más parecida
+  if(ref!=null){score.tot++;if(sung!=null){let best=99;for(let dt=0;dt<=0.25;dt+=0.05){const r=refAt(t-dt);if(r!=null){const d=Math.abs(((sung-r)%12+18)%12-6);if(d<best)best=d}}if(best<=1)score.hit++}}
+  const pct=score.tot?Math.round(score.hit/score.tot*100):0;$("scoreV").textContent=pct;
+  $("scoreHint").textContent=sung!=null&&ref!=null?(()=>{const d=((sung-ref)%12+18)%12-6;return Math.abs(d)<=1?"¡afinado!":d>0?"un poco alto":"un poco bajo"})():"";
+  drawNotes(t,sung);
+}
+function drawNotes(t,sung){
+  const c=$("notes"),W=c.clientWidth,H=c.clientHeight;if(c.width!==W*devicePixelRatio){c.width=W*devicePixelRatio;c.height=H*devicePixelRatio}
+  const g=c.getContext("2d");g.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);g.clearRect(0,0,W,H);
+  const span=8,x=tt=>(tt-(t-span*0.35))/span*W;
+  // centrar en la tesitura de la ventana visible
+  let lo=99,hi=0;for(let k=-3;k<=5;k+=0.1){const r=refAt(t+k);if(r!=null){lo=Math.min(lo,r);hi=Math.max(hi,r)}}
+  if(lo>hi){lo=55;hi=70}const mid=(lo+hi)/2,range=Math.max(14,hi-lo+6),y=m=>H/2-(m-mid)/range*H;
+  g.fillStyle="#ffffff10";g.fillRect(0,0,W,H);
+  g.fillStyle=getComputedStyle($("player")).getPropertyValue("--sung")||"#3df";g.globalAlpha=.55;
+  for(let k=-span*0.35;k<span*0.65;k+=REF.hop){const r=refAt(t+k);if(r!=null)g.fillRect(x(t+k),y(r)-4,W/span*REF.hop+1,8)}
+  g.globalAlpha=1;g.strokeStyle="#fff";g.lineWidth=2;g.beginPath();
+  // la voz cantada se dibuja en la octava más cercana a la referencia
+  let prevT=-9;for(const [tt,m] of trail){const r=refAt(tt)??mid;let mm=m;while(mm-r>6)mm-=12;while(r-mm>6)mm+=12;
+    if(tt-prevT>0.3)g.moveTo(x(tt),y(mm));else g.lineTo(x(tt),y(mm));prevT=tt}g.stroke();
+  g.fillStyle="#ffffff55";g.fillRect(x(t)-1,0,2,H);
+}
+function showResult(){if(!scoring||!score.tot)return false;const pct=Math.round(score.hit/score.tot*100);
+  $("resScore").textContent=pct;$("resMsg").textContent=pct>=85?"¡Increíble! Afinación de estudio 🎤":pct>=65?"¡Muy bien cantado!":pct>=40?"¡Bien! Sigue practicando":"¡A practicar un poco más!";
+  $("result").classList.add("on");return true}
+$("resAgain").onclick=()=>{$("result").classList.remove("on");resetScore();seekTo(0);play()};
+$("resClose").onclick=()=>$("result").classList.remove("on");
+
+// ---------- grabación ----------
+let rec=null,recDest=null,recT0=0,recTimer=null;
+function ensureRecDest(){if(recDest)return recDest;setupAudio();recDest=ctx.createMediaStreamDestination();gMaster.connect(recDest);return recDest}
+async function recStart(){
+  ensureRecDest();if(!mic){try{await micOn()}catch(e){toast("Se grabará solo la pista (sin micrófono)","",3500)}}
+  if(mic&&!mic.recConnected){mic.gain.connect(recDest);mic.recConnected=true}
+  const mime=MediaRecorder.isTypeSupported("audio/webm;codecs=opus")?"audio/webm;codecs=opus":"";
+  const chunks=[];rec=new MediaRecorder(recDest.stream,mime?{mimeType:mime,audioBitsPerSecond:192000}:{});
+  rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+  rec.onstop=async()=>{clearInterval(recTimer);$("player").classList.remove("recording");$("recBtn").classList.remove("on");
+    const blob=new Blob(chunks,{type:rec.mimeType||"audio/webm"});if(blob.size<2000)return toast("Grabación vacía","err");
+    loading(true,"Guardando tu grabación…");
+    try{const r=await fetch(API.base+"api/recording?id="+song.id,{method:"POST",headers:{"X-Token":API.token,"Content-Type":"application/octet-stream"},body:blob});
+      const j=await r.json();if(!r.ok)throw new Error(j.error);
+      toast("Grabación guardada: "+j.file.split(/[\\/]/).pop(),"ok",6000);if(T?.opener)T.opener.revealItemInDir(j.file).catch(()=>{});}
+    catch(e){toast("No se pudo guardar la grabación: "+e.message,"err",6000)}finally{loading(false)}};
+  rec.start(1000);recT0=Date.now();$("player").classList.add("recording");$("recBtn").classList.add("on");
+  recTimer=setInterval(()=>$("recTime").textContent=fmt((Date.now()-recT0)/1000),500);if(!isPlaying())play();
+}
+function recStop(){if(rec&&rec.state!=="inactive")rec.stop()}
+$("recBtn").onclick=()=>rec&&rec.state==="recording"?recStop():recStart();

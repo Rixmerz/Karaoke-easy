@@ -109,6 +109,9 @@
 <div id="player">
   <div id="stage"><video id="bgvideo" muted playsinline preload="auto"></video></div>
   <div id="ptitle"><h1 id="t1"></h1><h2 id="t2"></h2></div>
+  <canvas id="notes"></canvas>
+  <div id="scoreBox"><div class="sub">Puntuación</div><b id="scoreV">0</b><span id="scoreHint"></span></div>
+  <div id="recTag"><span class="recdot"></span> Grabando <span id="recTime">0:00</span></div>
   <div id="lyrics"><div id="wait"></div><div id="dots"></div><div class="line" id="L0"></div><div class="line next" id="L1"></div></div>
   <div id="ptop"><button class="pb" id="back"><i data-icon="arrow-left"></i> Biblioteca</button>
     <span class="partyTag" id="partyTag" hidden><i data-icon="party-popper" data-size="14"></i> <span id="partyPos"></span></span>
@@ -131,6 +134,8 @@
       <option value="Consolas, 'Courier New', monospace">Máquina de escribir</option></select>
     <label>Color al cantar</label><div class="swatches" id="lyrColors"></div>
   </div>
+  <div id="result"><div class="nbox"><div class="sub">Tu puntuación</div><div class="bigscore" id="resScore">0</div><h2 id="resMsg"></h2>
+    <div class="row" style="justify-content:center;gap:10px"><button class="btn pri" id="resAgain"><i data-icon="rotate-ccw"></i> Otra vez</button><button class="btn" id="resClose">Cerrar</button></div></div></div>
   <div id="nextUp"><div class="nbox">
     <div class="sub">Siguiente canción</div><h1 id="nuTitle"></h1><h2 id="nuArtist"></h2>
     <div class="ring"><span id="nuCount">8</span></div>
@@ -147,6 +152,14 @@
       <div class="grp" title="Velocidad ([ / ])"><label><i data-icon="gauge" data-size="15"></i> Velocidad</label><button class="pb" id="sDown">−</button><span class="val" id="speedV">100 %</span><button class="pb" id="sUp">+</button></div>
       <div class="grp" title="Repetir tramo: A inicio, B fin, Esc quita"><label><i data-icon="repeat" data-size="15"></i></label><button class="pb" id="aBtn">A</button><button class="pb" id="bBtn">B</button><button class="pb" id="abClear" title="Quitar tramo"><i data-icon="x" data-size="15"></i></button></div>
       <div class="grp"><label><i data-icon="volume-2" data-size="15"></i></label><input id="vol" type="range" min="0" max="100" value="100" style="width:90px"></div>
+    </div>
+    <div class="prow" style="margin-top:8px">
+      <div class="grp" title="Tu micrófono por los parlantes, con eco (usa audífonos para evitar acoples)">
+        <button class="pb" id="micBtn"><i data-icon="mic-off" data-size="15"></i> Micrófono</button>
+        <label>Vol</label><input id="micVol" type="range" min="0" max="150" value="90" style="width:80px">
+        <label>Eco</label><input id="echo" type="range" min="0" max="100" value="35" style="width:80px"></div>
+      <button class="pb" id="scoreBtn" title="Línea de notas y puntuación de afinación (necesita el micrófono)"><i data-icon="award" data-size="15"></i> Puntuación</button>
+      <button class="pb" id="recBtn" title="Grabar tu interpretación (pista + tu voz)"><i data-icon="circle-dot" data-size="15"></i> Grabar</button>
     </div>
     <div id="help">Espacio play/pausa · V voz · ↑↓ volumen de voz · ←→ ±5 s · +/− tono · [ ] velocidad · A/B repetir · F pantalla completa · L letra · E ajustar · Esc salir</div>
   </div>

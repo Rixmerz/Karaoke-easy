@@ -176,6 +176,14 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
                         meta["id"] = q["id"][0]
                         meta["has_video"] = bool(meta.get("video") and Path(meta["video"]).exists())
                         return self._json(meta)
+                    if parts[1:] == ["pitchref"]:
+                        pj = folder / "pitch.json"
+                        if not pj.exists():
+                            from .pitchref import compute
+                            with _pitch_lock:
+                                if not pj.exists():
+                                    compute(folder / "voz.m4a", pj, run_ffmpeg)
+                        return self._json(json.loads(pj.read_text(encoding="utf-8")))
                     if parts[1:] == ["pitch"]:
                         st = max(-12, min(12, int(q.get("st", ["0"])[0])))
                         if st == 0:
@@ -236,6 +244,34 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
                 return self._json(settings.save(self._body()))
             if parts == ["api", "lists"]:
                 return self._json(library.save_lists(self._body()))
+            if parts == ["api", "recording"]:
+                folder = songs.folder(q.get("id", [""])[0])
+                if folder is None:
+                    return self._json({"error": "canción no encontrada"}, 404)
+                n = int(self.headers.get("Content-Length", "0") or 0)
+                if n <= 0 or n > 500 * 1024 * 1024:
+                    return self._json({"error": "grabación vacía o demasiado grande"}, 400)
+                import time as _t
+                rec_dir = folder.parent / "grabaciones"
+                rec_dir.mkdir(exist_ok=True)
+                stamp = _t.strftime("%Y-%m-%d_%H-%M-%S")
+                raw = rec_dir / f"grabacion_{stamp}.webm"
+                with open(raw, "wb") as f:
+                    left = n
+                    while left > 0:
+                        chunk = self.rfile.read(min(1 << 20, left))
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        left -= len(chunk)
+                mp3 = raw.with_suffix(".mp3")
+                try:
+                    run_ffmpeg(["-i", str(raw), "-c:a", "libmp3lame", "-b:a", "256k", str(mp3)])
+                    raw.unlink()
+                    out = mp3
+                except Exception:
+                    out = raw
+                return self._json({"ok": True, "file": str(out), "folder": str(rec_dir)})
             if parts == ["api", "edit"]:
                 folder = songs.folder(q.get("id", [""])[0])
                 if folder is None:

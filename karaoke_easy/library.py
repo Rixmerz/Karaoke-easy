@@ -112,6 +112,11 @@ def write_package(builder, words, inst: Path, voc: Path, run_ffmpeg):
         from .lyrics import guess_artist_title
         a, t = guess_artist_title(builder.name)
         meta["artist"], meta["title"] = a, t or builder.name
+    try:  # curva de notas para la puntuación
+        from .pitchref import compute
+        compute(voc, folder / "pitch.json")
+    except Exception:
+        pass
     if video:  # portada para la biblioteca
         try:
             run_ffmpeg(["-ss", f"{dur * 0.3:.1f}", "-i", video, "-frames:v", "1", "-vf", "scale=480:-2",

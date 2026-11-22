@@ -218,3 +218,17 @@ input[type=range]{accent-color:var(--sung)}
 body.lyrics-only .app,body.lyrics-only #ptop,body.lyrics-only #pbar,body.lyrics-only #splash{display:none!important}
 body.lyrics-only #player{cursor:none}
 [hidden]{display:none!important}
+
+/* ---------- micrófono, puntuación y grabación ---------- */
+#notes{position:absolute;left:0;right:0;bottom:170px;height:120px;width:100%;z-index:3;display:none;pointer-events:none}
+#player.scoring #notes,#player.scoring #scoreBox{display:block}
+#scoreBox{position:absolute;top:64px;right:18px;z-index:4;display:none;text-align:right;background:#0007;border-radius:14px;padding:8px 14px}
+#scoreBox b{font-size:34px;display:block;line-height:1.1}#scoreBox span{font-size:12px;color:#b9b9c9}
+#recTag{position:absolute;top:64px;left:18px;z-index:4;display:none;align-items:center;gap:8px;background:#0008;border-radius:20px;padding:6px 14px;font-weight:700}
+#player.recording #recTag{display:flex}
+.recdot{width:10px;height:10px;border-radius:50%;background:#ff3b3b;animation:blink 1s infinite}@keyframes blink{50%{opacity:.25}}
+#recBtn.on{background:#ff3b3b;color:#fff}
+#result{position:absolute;inset:0;z-index:31;display:none;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,#12304aee,#07070cf5)}
+#result.on{display:flex}#result .nbox{text-align:center;animation:fade .3s}
+.bigscore{font-size:clamp(70px,12vw,150px);font-weight:900;background:linear-gradient(135deg,var(--acc),#ffd23f);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1}
+#result h2{color:#ddd;font-weight:600;margin:8px 0 24px}
