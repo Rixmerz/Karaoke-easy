@@ -71,6 +71,7 @@
           <div class="sub" style="font-size:12px" id="lyNote">Solo se aplica cuando procesas una sola canción.</div>
         </div>
       </details>
+      <div class="banner" id="needModels" hidden><i data-icon="circle-alert"></i> <span>Antes de crear karaokes hay que descargar los componentes de procesamiento (una sola vez).</span> <button class="btn sm pri" data-go="settings">Ir a Ajustes</button></div>
       <div class="cta"><button class="btn ghost" id="clearQ">Vaciar</button><button class="btn pri" id="create" disabled>Crear karaoke</button></div>
     </section>
 
@@ -99,6 +100,9 @@
           <label class="switch"><input type="checkbox" id="sGuide"></label></div>
         <div class="set"><div class="t">Tema<span>Claro u oscuro</span></div>
           <select class="field" id="sTheme"><option value="dark">Oscuro</option><option value="light">Claro</option></select></div>
+        <div class="set"><div class="t">Componentes de procesamiento<span id="sModels">Comprobando…</span>
+            <div class="pbar" id="mBar" style="margin-top:8px;display:none"><i></i></div></div>
+          <button class="btn sm" id="sModelsBtn" hidden><i data-icon="download" data-size="15"></i> Descargar (≈1,2 GB)</button></div>
         <div class="set"><div class="t">Acerca de<span id="sAbout">Karaoke Easy</span></div><button class="btn sm" id="sUpd">Buscar actualizaciones</button></div>
       </div>
     </section>

@@ -21,8 +21,11 @@ KEYS = [k for k, _, _ in STEPS]
 def _worker(spec, q):
     """Se ejecuta en un proceso hijo."""
     try:
+        import sys
         from . import paths
         paths.setup_offline()
+        if getattr(sys, "frozen", False) and not paths.models_ready():
+            raise RuntimeError("Faltan los componentes de procesamiento. Descárgalos desde Ajustes › Componentes.")
         from .downloader import download, is_url
         from .pipeline import KaraokeBuilder, Options
 

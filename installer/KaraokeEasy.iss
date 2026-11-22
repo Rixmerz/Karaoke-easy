@@ -11,7 +11,11 @@ AppPublisher=Karaoke Easy
 DefaultDirName={autopf}\Karaoke Easy
 DefaultGroupName={#AppName}
 OutputDir=..\Output
+#ifdef LIGHT
+OutputBaseFilename=KaraokeEasy-Setup-Ligero-{#AppVersion}
+#else
 OutputBaseFilename=KaraokeEasy-Setup-{#AppVersion}
+#endif
 ; Los modelos de IA casi no se comprimen: compresión rápida (mismo tamaño, varios minutos menos)
 Compression=lzma2/fast
 SolidCompression=no
@@ -32,7 +36,11 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "..\src-tauri\target\release\KaraokeEasy.exe"; DestDir: "{app}"; Flags: ignoreversion
+#ifdef LIGHT
+Source: "..\dist\KaraokeEngine\*"; DestDir: "{app}\engine"; Excludes: "\_internal\models"; Flags: ignoreversion recursesubdirs createallsubdirs
+#else
 Source: "..\dist\KaraokeEngine\*"; DestDir: "{app}\engine"; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
 
 [InstallDelete]
 ; versiones 1.x: el motor estaba en la raíz de la app
@@ -45,3 +53,5 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\KaraokeEasy.exe"; Tasks: desk
 
 [Run]
 Filename: "{app}\KaraokeEasy.exe"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; actualización automática (instalación silenciosa): volver a abrir la app
+Filename: "{app}\KaraokeEasy.exe"; Flags: nowait; Check: WizardSilent

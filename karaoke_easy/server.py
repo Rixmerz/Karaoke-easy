@@ -160,7 +160,14 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
                     return self._json(library.load_lists())
                 if parts[:2] == ["api", "version"]:
                     from . import paths
-                    return self._json({"version": paths.app_version()})
+                    return self._json({"version": paths.app_version(), "bundled_models": paths.BUNDLED_MODELS})
+                if parts[:2] == ["api", "models"]:
+                    from . import downloads, paths
+                    return self._json({"ready": paths.models_ready(), "dir": str(paths.MODELS_DIR),
+                                       "download": downloads.MODELS.public()})
+                if parts[:2] == ["api", "update"]:
+                    from . import downloads
+                    return self._json(downloads.UPDATE.public())
                 if not parts:
                     return self._file(STATIC / "index.html")
                 if len(parts) == 1 and re.fullmatch(r"[\w.-]+\.(css|js|html|png|svg|ico)", parts[0]):
@@ -244,6 +251,15 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
                 return self._json(settings.save(self._body()))
             if parts == ["api", "lists"]:
                 return self._json(library.save_lists(self._body()))
+            if parts == ["api", "models", "download"]:
+                from . import downloads
+                url = self._body().get("url") or downloads.MODELS_URL
+                if not (url.startswith("https://github.com/Rixmerz/Karaoke-easy/") or url.startswith("http://127.0.0.1:")):
+                    return self._json({"error": "origen no permitido"}, 400)
+                return self._json({"started": downloads.start_models(url)})
+            if parts == ["api", "update", "download"]:
+                from . import downloads
+                return self._json({"started": downloads.start_update(self._body().get("url", ""))})
             if parts == ["api", "recording"]:
                 folder = songs.folder(q.get("id", [""])[0])
                 if folder is None:

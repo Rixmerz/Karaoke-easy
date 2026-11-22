@@ -34,6 +34,27 @@ fn selftest_done(app: tauri::AppHandle, ok: bool) {
     app.exit(if ok { 0 } else { 1 });
 }
 
+/// Ejecuta el instalador de una actualización (descargado por el motor) y cierra la app.
+/// Solo acepta un .exe dentro de %LOCALAPPDATA%\KaraokeEasy\actualizacion.
+#[tauri::command]
+fn run_installer(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let base = std::env::var("LOCALAPPDATA")
+        .map(|b| PathBuf::from(b).join("KaraokeEasy").join("actualizacion"))
+        .map_err(|_| "LOCALAPPDATA no definido".to_string())?;
+    let p = PathBuf::from(&path).canonicalize().map_err(|e| e.to_string())?;
+    let b = base.canonicalize().map_err(|e| e.to_string())?;
+    let is_exe = p.extension().map(|e| e.eq_ignore_ascii_case("exe")).unwrap_or(false);
+    if !p.starts_with(&b) || !is_exe {
+        return Err("instalador no permitido".into());
+    }
+    Command::new(&p)
+        .args(["/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS"])
+        .spawn()
+        .map_err(|e| format!("no se pudo iniciar el instalador: {e}"))?;
+    app.exit(0);
+    Ok(())
+}
+
 /// Comando que lanza el motor: KARAOKE_ENGINE_CMD (desarrollo) o engine\KaraokeEngine.exe junto a la app.
 fn engine_command() -> Result<Command, String> {
     if let Ok(cmdline) = std::env::var("KARAOKE_ENGINE_CMD") {
@@ -115,7 +136,7 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .manage(Engine { child: Mutex::new(child), info })
-        .invoke_handler(tauri::generate_handler![engine_info, selftest_done])
+        .invoke_handler(tauri::generate_handler![engine_info, selftest_done, run_installer])
         .build(tauri::generate_context!())
         .expect("error al iniciar Karaoke Easy");
     app.run(|handle, event| {

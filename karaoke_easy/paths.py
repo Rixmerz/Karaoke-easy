@@ -10,7 +10,29 @@ def app_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-MODELS_DIR = Path(os.environ.get("KARAOKE_MODELS", app_dir() / "models"))
+def _user_cache_dir() -> Path:
+    base = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), ".cache")
+    return Path(base) / "KaraokeEasy"
+
+
+def _models_dir() -> Path:
+    """Modelos incluidos en el instalador completo; si no están (instalador ligero),
+    los descargados en la carpeta del usuario."""
+    if os.environ.get("KARAOKE_MODELS"):
+        return Path(os.environ["KARAOKE_MODELS"])
+    bundled = app_dir() / "models"
+    if (bundled / "demucs" / "htdemucs.yaml").exists():
+        return bundled
+    return _user_cache_dir() / "models"
+
+
+MODELS_DIR = _models_dir()
+BUNDLED_MODELS = MODELS_DIR == app_dir() / "models"
+
+
+def models_ready() -> bool:
+    return ((MODELS_DIR / "demucs" / "htdemucs.yaml").exists() and (MODELS_DIR / "mms_fa_fp16.pt").exists()
+            and bool(bundled_whisper_models()))
 TORCH_HOME = MODELS_DIR / "torch"  # solo al preparar los modelos (tools/download_models.py)
 DEMUCS_DIR = MODELS_DIR / "demucs"  # htdemucs.yaml + <firma>.th: se carga directo, sin torch.hub
 

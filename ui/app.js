@@ -47,7 +47,7 @@ function go(view) {
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + view));
   document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("on", b.dataset.view === view));
   if (view === "library") loadLibrary();
-  if (view === "settings") loadSettings();
+  if (view === "settings") { loadSettings(); refreshModels(); }
 }
 document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => go(b.dataset.view));
 document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => go(b.dataset.go));
@@ -275,6 +275,7 @@ $("lySearch").onclick = async () => {
 };
 $("create").onclick = async () => {
   if (!QUEUE.length) return;
+  if (!MODELS_READY) { toast("Primero descarga los componentes en Ajustes", "err"); go("settings"); return; }
   const single = QUEUE.length === 1;
   const options = { semitones, language: $("optLang").value || null, use_source_video: $("optVideoBg").checked, guide_track: $("optGuide").checked };
   if (single) Object.assign(options, { lyrics: $("lyText").value.trim() || null, artist: $("lyArtist").value.trim(), title: $("lyTitle").value.trim() });
@@ -370,17 +371,58 @@ $("sUpd").onclick = () => checkUpdate(true);
 let VERSION = "0";
 const vnum = v => v.split(".").map(n => +n || 0);
 const newer = (a, b) => { const x = vnum(a), y = vnum(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
+let BUNDLED = true;
 async function checkUpdate(manual) {
   try {
     const r = await (await fetch("https://api.github.com/repos/Rixmerz/Karaoke-easy/releases/latest")).json();
     const v = (r.tag_name || "").replace(/^v/, "");
     if (v && newer(v, VERSION)) {
       const box = $("updateBox"); box.style.display = "block"; box.innerHTML = `${icon("download", 15)} <b>Versión ${esc(v)} disponible</b><br>Haz clic para actualizar`;
-      box.onclick = () => T?.opener ? T.opener.openUrl(r.html_url) : open(r.html_url);
-      if (manual) toast(`Hay una versión nueva: ${v}`, "ok");
-    } else if (manual) toast("Ya tienes la última versión ✓", "ok");
+      box.onclick = () => updateFlow(r, v);
+      if (manual) updateFlow(r, v);
+    } else if (manual) toast("Ya tienes la última versión", "ok");
   } catch (e) { if (manual) toast("No se pudo comprobar (¿sin internet?)", "err"); }
 }
+function updateFlow(rel, v) {
+  const assets = (rel.assets || []).filter(a => /^KaraokeEasy-Setup-.*\.exe$/i.test(a.name));
+  const asset = assets.find(a => BUNDLED ? !/Ligero/i.test(a.name) : /Ligero/i.test(a.name)) || assets[0];
+  if (!asset || !T?.core) { T?.opener ? T.opener.openUrl(rel.html_url) : open(rel.html_url); return; }
+  const mb = Math.round(asset.size / 1048576);
+  modal(`Actualizar a la versión ${esc(v)}`, `<p>Se descargará la actualización (${mb} MB) y se instalará automáticamente. La app se reiniciará al terminar.</p>
+    <div class="pbar updbar" id="uBar"><i></i></div><p class="sub" id="uTxt">Tu biblioteca y tus ajustes se conservan.</p>`, [
+    { label: "Más tarde" },
+    { label: `${icon("download", 15)} Actualizar ahora`, primary: true, onclick: async () => {
+        const btn = $("mBtns").lastElementChild; btn.disabled = true;
+        await api("update/download", { url: asset.browser_download_url });
+        const poll = setInterval(async () => {
+          const st = await api("update");
+          $("uBar").querySelector("i").style.width = Math.round(st.progress * 100) + "%";
+          $("uTxt").textContent = st.state === "running" ? `Descargando… ${Math.round(st.progress * 100)} %` : st.state === "error" ? "Error: " + st.error : "Descarga completa";
+          if (st.state === "done") { clearInterval(poll); $("uTxt").textContent = "Instalando… la app se reiniciará sola.";
+            try { await T.core.invoke("run_installer", { path: st.path }); } catch (e) { $("uTxt").textContent = "No se pudo instalar: " + e; } }
+          if (st.state === "error") { clearInterval(poll); btn.disabled = false; }
+        }, 600);
+        return false; } }]);
+}
+// ---------------- componentes (instalador ligero) ----------------
+let MODELS_READY = true;
+async function refreshModels() {
+  let m; try { m = await api("models"); } catch (e) { return; }
+  MODELS_READY = m.ready; $("needModels").hidden = m.ready;
+  const d = m.download, bar = $("mBar");
+  if (m.ready) { $("sModels").textContent = BUNDLED ? "Incluidos en esta instalación" : "Descargados y listos"; $("sModelsBtn").hidden = true; bar.style.display = "none"; return true; }
+  $("sModelsBtn").hidden = d.state === "running" || d.state === "extracting";
+  bar.style.display = d.state === "running" || d.state === "extracting" ? "block" : "none";
+  bar.querySelector("i").style.width = Math.round(d.progress * 100) + "%";
+  $("sModels").textContent = d.state === "running" ? `Descargando… ${Math.round(d.progress * 100)} %` : d.state === "extracting" ? "Instalando componentes…"
+    : d.state === "error" ? "Error al descargar: " + d.error : "Necesarios para crear karaokes (descarga única de ≈1,2 GB)";
+  return false;
+}
+$("sModelsBtn").onclick = async () => {
+  await api("models/download", {}); refreshModels();
+  const t = setInterval(async () => { const ok = await refreshModels(); const st = (await api("models")).download.state;
+    if (ok || st === "error") { clearInterval(t); if (ok) toast("Componentes listos. ¡Ya puedes crear karaokes!", "ok"); } }, 1000);
+};
 
 // ---------------- primer arranque ----------------
 function onboarding(step = 0) {
@@ -416,7 +458,8 @@ async function boot() {
   } else {
     API.base = location.origin + "/"; API.token = new URLSearchParams(location.search).get("t") || "";
   }
-  try { VERSION = (await api("version")).version; } catch (e) { }
+  try { const vi = await api("version"); VERSION = vi.version; BUNDLED = vi.bundled_models; } catch (e) { }
+  await refreshModels();
   $("ver").textContent = VERSION; $("sAbout").textContent = "Karaoke Easy " + VERSION;
   await loadSettings().catch(() => { });
   splash("Cargando tu biblioteca…");

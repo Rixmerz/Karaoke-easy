@@ -61,6 +61,10 @@ jobs:
           $ver = "${{ inputs.version }}"; if (-not $ver) { $ver = (Get-Content VERSION).Trim() }
           "APP_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$ver" installer\KaraokeEasy.iss
+          # Instalador ligero (sin componentes: se descargan en el primer uso) + paquete de componentes
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$ver" "/DLIGHT" installer\KaraokeEasy.iss
+          Push-Location dist\KaraokeEngine\_internal; 7z a -tzip -mx0 ..\..\..\Output\KaraokeEasy-Modelos.zip models | Out-Null; Pop-Location
+          Get-ChildItem Output | Select-Object Name, Length
       - name: Prueba real del programa INSTALADO (carpeta de solo lectura, sin internet, desde un enlace)
         shell: pwsh
         run: |
@@ -72,7 +76,7 @@ jobs:
           $tts.Dispose()
           python -c "import numpy as n,soundfile as s,librosa as l;v,_=l.load('voz.wav',sr=44100);sr=44100;intro=sr*6;L=intro+len(v)+sr*3;t=n.arange(L)/sr;m=sum(n.sin(2*n.pi*f*t) for f in [196,246.9,293.7,98])*0.12;x=m.copy();x[intro:intro+len(v)]+=v*0.9;s.write('cancion prueba.wav',n.stack([x,x],1),sr)"
           # Instalar con el Setup.exe real, como un usuario
-          $setup = Get-ChildItem Output\KaraokeEasy-Setup-*.exe | Select-Object -First 1
+          $setup = Get-ChildItem Output\KaraokeEasy-Setup-*.exe | Where-Object { $_.Name -notmatch "Ligero" } | Select-Object -First 1
           Start-Process $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=C:\KE" -Wait
           if (-not (Test-Path C:\KE\KaraokeEasy.exe)) { throw "El instalador no dejó KaraokeEasy.exe" }
           if (-not (Test-Path C:\KE\engine\KaraokeEngine.exe)) { throw "El instalador no dejó el motor" }
@@ -109,6 +113,16 @@ jobs:
           Start-Sleep 2
           if (Get-Process KaraokeEngine -ErrorAction SilentlyContinue) { throw "El motor quedó abierto al cerrar la app" }
           "App de escritorio OK"
+          # Instalador ligero: sin componentes, pero la app debe abrir igual
+          $light = Get-ChildItem Output\KaraokeEasy-Setup-Ligero-*.exe | Select-Object -First 1
+          Start-Process $light.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=C:\KE2" -Wait
+          if (Test-Path C:\KE2\engine\_internal\models) { throw "El instalador ligero no debería incluir los componentes" }
+          $env:KARAOKE_UI_SELFTEST = "1"
+          $pl = Start-Process C:\KE2\KaraokeEasy.exe -PassThru
+          if (-not $pl.WaitForExit(180000)) { Stop-Process $pl.Id -Force; throw "La app ligera no respondió" }
+          if ($pl.ExitCode -ne 0) { throw "La app ligera no abrió bien (código $($pl.ExitCode))" }
+          Remove-Item Env:KARAOKE_UI_SELFTEST
+          "Instalador ligero OK"
       - uses: actions/upload-artifact@v4
         with:
           name: resultado-prueba
@@ -119,7 +133,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: KaraokeEasy-Setup
-          path: Output/*.exe
+          path: Output/KaraokeEasy-Setup-[0-9]*.exe
           compression-level: 0
       - name: Publicar Release (automático en cada build correcto)
         uses: softprops/action-gh-release@v2
@@ -131,9 +145,11 @@ jobs:
           body: |
             Instalador para Windows 10/11 (64 bits) con todos los modelos incluidos: no necesita Python ni internet para procesar (solo para buscar la letra en LRCLIB).
 
-            1. Descarga `KaraokeEasy-Setup-${{ env.APP_VERSION }}.exe` (abajo, en *Assets*) y ejecútalo. Si SmartScreen avisa: "Más información" → "Ejecutar de todas formas".
+            1. Descarga **`KaraokeEasy-Setup-${{ env.APP_VERSION }}.exe`** (completo, funciona sin internet) o **`KaraokeEasy-Setup-Ligero-${{ env.APP_VERSION }}.exe`** (más liviano: descarga los componentes la primera vez) desde *Assets* y ejecútalo. Si SmartScreen avisa: "Más información" → "Ejecutar de todas formas".
             2. Siguiente → Instalar → abre **Karaoke Easy**.
             3. Elige tu MP3/MP4/WAV → (opcional) *Analizar tono* y semitonos → **Crear karaoke**.
 
             Compilado desde ${{ github.sha }}.
-          files: Output/*.exe
+          files: |
+            Output/*.exe
+            Output/KaraokeEasy-Modelos.zip

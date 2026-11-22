@@ -2,6 +2,13 @@
 
 > **v2**: app de escritorio nueva en **Tauri 2 (Rust)** — Biblioteca como pantalla de inicio, arrastrar y soltar, cola de canciones con pasos y tiempo restante, ajustes y reproductor integrado.
 
+## Novedades 2.1
+- Iconos claros (Lucide) en toda la interfaz, pantalla de carga y asistente de primer arranque.
+- **Favoritas y listas**; **modo fiesta** (canciones seguidas con pantalla “Siguiente”); editar título/artista.
+- Reproductor: recuerda **tono, velocidad y voz** por canción; **estilo de letra** (tamaño, tipografía, color); **segunda pantalla** (letra en la TV, controles en el PC).
+- **Micrófono con eco**, **línea de notas y puntuación** de afinación, y **grabar tu interpretación** (MP3 en `grabaciones/`).
+- **Actualización automática** desde la app y **instalador ligero** (descarga los componentes la primera vez).
+
 ## Arquitectura (v2)
 ```
 KaraokeEasy.exe  (Tauri 2 · Rust · interfaz en ui/ sobre WebView2)

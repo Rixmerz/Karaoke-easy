@@ -232,3 +232,7 @@ body.lyrics-only #player{cursor:none}
 #result.on{display:flex}#result .nbox{text-align:center;animation:fade .3s}
 .bigscore{font-size:clamp(70px,12vw,150px);font-weight:900;background:linear-gradient(135deg,var(--acc),#ffd23f);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1}
 #result h2{color:#ddd;font-weight:600;margin:8px 0 24px}
+
+.banner{display:flex;align-items:center;gap:10px;background:#ffb54718;border:1px solid #ffb54755;color:var(--txt);border-radius:12px;padding:12px 14px;margin:14px 0}
+.banner .ic{color:var(--warn)}.banner span{flex:1}
+.updbar{margin:14px 0 6px}
