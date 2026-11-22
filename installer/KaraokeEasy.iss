@@ -12,8 +12,9 @@ DefaultDirName={autopf}\Karaoke Easy
 DefaultGroupName={#AppName}
 OutputDir=..\Output
 OutputBaseFilename=KaraokeEasy-Setup-{#AppVersion}
-Compression=lzma2/max
-SolidCompression=yes
+; Los modelos de IA casi no se comprimen: compresión rápida (mismo tamaño, varios minutos menos)
+Compression=lzma2/fast
+SolidCompression=no
 DiskSpanning=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible

@@ -1,8 +1,10 @@
 name: Instalador Windows
 
+# El instalador completo solo se construye al cambiar VERSION (nueva versión), con un tag v*
+# o a mano. En cada push normal corren solo las pruebas rápidas (tests.yml).
 on:
   push:
-    branches: ["**"]
+    paths: ["VERSION"]
     tags: ["v*"]
   workflow_dispatch:
     inputs:
@@ -23,6 +25,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Caché de modelos
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: models-${{ hashFiles('tools/download_models.py') }}-small
       - name: Dependencias
         run: |
           python -m pip install --upgrade pip

@@ -55,3 +55,7 @@ GitHub Actions (`.github/workflows/windows-installer.yml`) construye en Windows 
 
 ## Desde un enlace
 Pegue el enlace (YouTube u otro sitio compatible con [yt-dlp](https://github.com/yt-dlp/yt-dlp)) en el campo *Archivo o enlace* y pulse **Crear karaoke**: se descarga en `<salida>\descargas\` y se procesa igual que un archivo. El artista y el título del vídeo se usan para buscar la letra. Descargue solo contenido sobre el que tenga derechos o permiso.
+
+## Integración continua
+- **Pruebas rápidas** (`tests.yml`, Linux, ~2 min): en cada push.
+- **Instalador + Release** (`windows-installer.yml`, Windows, ~8–10 min): solo al cambiar el número en `VERSION` (o con un tag `v*`, o a mano desde *Actions → Run workflow*). Publica la Release `v<VERSION>` con el `Setup.exe`.
