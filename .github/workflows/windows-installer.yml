@@ -69,7 +69,9 @@ jobs:
           # Carpeta de instalación de solo lectura (como C:\Program Files para un usuario normal)
           # Solo derechos de escritura (no "W" genérico: incluye SYNCHRONIZE y bloquearía ejecutar)
           icacls C:\KE /deny "*S-1-1-0:(OI)(CI)(WD,AD,WA,WEA,DC)" /T /C /Q | Out-Null
-          try { New-Item C:\KE\_prueba_escritura.txt -ErrorAction Stop | Out-Null; throw "la carpeta debería ser de solo lectura" } catch [System.UnauthorizedAccessException] { "Carpeta de solo lectura OK" }
+          $escribe = $false
+          try { New-Item C:\KE\_prueba_escritura.txt -ErrorAction Stop | Out-Null; $escribe = $true } catch { "Carpeta de solo lectura OK" }
+          if ($escribe) { throw "la carpeta instalada debería ser de solo lectura" }
           New-Item -ItemType Directory salida | Out-Null
           # Se procesa DESDE UN ENLACE (yt-dlp) servido localmente
           New-Item -ItemType Directory web | Out-Null; Copy-Item "cancion prueba.wav" web\
