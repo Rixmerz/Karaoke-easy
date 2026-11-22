@@ -32,3 +32,14 @@ def test_align_offset_for_unrecognized_line():
     out = align(lines, asr)
     assert abs(out[3].start - 55.0) < 0.01           # 20 s + desfase de 35 s
     assert all(x.start <= y.start for x, y in zip(out, out[1:]))
+
+
+def test_accents_recovered_from_whisper():
+    from karaoke_easy.lyrics import with_accents
+    assert with_accents("veras", "verás") == "verás"
+    assert with_accents("Mi,", "mí") == "Mí,"
+    assert with_accents("Cancion", "canción") == "Canción"
+    assert with_accents("hola", "ola") == "hola"          # palabra distinta: no tocar
+    lines = parse_lyrics("Me veras volar")
+    out = align(lines, [Word("me", 1, 1.2), Word("verás", 1.3, 1.6), Word("volar", 1.7, 2)])
+    assert [w.text for w in out] == ["Me", "verás", "volar"]

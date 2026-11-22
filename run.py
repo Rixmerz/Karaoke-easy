@@ -31,6 +31,8 @@ def selftest(path):
         if os.environ.get("KARAOKE_LYRICS"):
             assert b.aligned_lines > 0, "la alineación forzada (MMS_FA) no refinó ningún verso"
             print(f"MMS_FA refinó {b.aligned_lines} versos")
+        assert b.package is not None and (b.package / "cancion.json").exists(), "falta el paquete del reproductor"
+        print("Paquete del reproductor:", b.package)
         print("SELFTEST OK")
         return 0
     except Exception:
@@ -41,6 +43,14 @@ def selftest(path):
 
 
 if __name__ == "__main__":
+    if "--player" in sys.argv:
+        import multiprocessing
+
+        multiprocessing.freeze_support()
+        from karaoke_easy.player_main import main as player_main
+
+        player_main(sys.argv[1:])
+        sys.exit(0)
     if os.environ.get("KARAOKE_SELFTEST"):
         import multiprocessing
 

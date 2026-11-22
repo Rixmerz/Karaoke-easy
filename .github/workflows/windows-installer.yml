@@ -90,6 +90,10 @@ jobs:
           if ($p.ExitCode -ne 0) { exit 1 }
           Remove-Item Env:HTTPS_PROXY, Env:HTTP_PROXY
           Get-ChildItem -Recurse salida | Select-Object FullName, Length
+          # El reproductor propio (WebView2) debe abrir desde la instalación
+          $pp = Start-Process C:\KE\KaraokeEasy.exe -ArgumentList "--player","--selftest" -Wait -PassThru
+          if ($pp.ExitCode -ne 0) { throw "El reproductor no abrió (código $($pp.ExitCode))" }
+          "Reproductor OK"
       - uses: actions/upload-artifact@v4
         with:
           name: resultado-prueba

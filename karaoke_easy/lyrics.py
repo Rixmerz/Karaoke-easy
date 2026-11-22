@@ -34,6 +34,12 @@ def guess_artist_title(filename: str):
 
 def search(artist: str, title: str, duration: float | None = None, timeout=15):
     """Devuelve el mejor resultado de LRCLIB (dict) o None."""
+    res = search_all(artist, title, duration, timeout)
+    return res[0] if res else None
+
+
+def search_all(artist: str, title: str, duration: float | None = None, timeout=15):
+    """Todos los resultados con letra, ordenados (sincronizadas primero, duración más parecida)."""
     q = {"track_name": title}
     if artist:
         q["artist_name"] = artist
@@ -46,15 +52,13 @@ def search(artist: str, title: str, duration: float | None = None, timeout=15):
         with urllib.request.urlopen(req, timeout=timeout) as r:
             results = json.load(r)
     results = [x for x in results if x.get("plainLyrics") or x.get("syncedLyrics")]
-    if not results:
-        return None
 
     def score(x):
         s = 0 if x.get("syncedLyrics") else 100
         if duration and x.get("duration"):
             s += abs(x["duration"] - duration) / 10
         return s
-    return min(results, key=score)
+    return sorted(results, key=score)
 
 
 def parse_lyrics(text: str):
@@ -81,6 +85,23 @@ def _norm(w: str) -> str:
     return re.sub(r"[^a-z0-9ñ]", "", w)
 
 
+_EDGE = re.compile(r"^(\W*)(.*?)(\W*)$", re.S)
+
+
+def with_accents(tok: str, heard: str) -> str:
+    """Si Whisper oyó la misma palabra pero con tildes/ñ ('veras' vs 'verás'), usa esa grafía,
+    conservando mayúscula inicial y la puntuación de la letra original."""
+    m, h = _EDGE.match(tok), _EDGE.match(heard.strip())
+    core, hcore = m.group(2), h.group(2)
+    if not core or not hcore or core == hcore or _norm(core) != _norm(hcore):
+        return tok
+    if not any(ord(c) > 127 for c in hcore):
+        return tok
+    fixed = "".join(hc.upper() if oc.isupper() else hc.lower() for oc, hc in zip(core, hcore)) \
+        if len(core) == len(hcore) else hcore
+    return m.group(1) + fixed + m.group(3)
+
+
 def align(lines, asr_words):
     """lines: [(t_lrc|None, texto)]; asr_words: [Word] de Whisper. Devuelve [Word] con el texto correcto.
     Cada línea nueva se marca con text que empieza por '\\n' para forzar el salto de línea."""
@@ -98,6 +119,7 @@ def align(lines, asr_words):
         for k in range(blk.size):
             w = asr_words[blk.b + k]
             times[blk.a + k] = (w.start, w.end)
+            ref[blk.a + k] = (ref[blk.a + k][0], with_accents(ref[blk.a + k][1], w.text))
     # Fuzzy dentro de los huecos 'replace' (p.ej. 'velar' ~ 'volar')
     for tag, i1, i2, j1, j2 in sm.get_opcodes():
         if tag == "replace":

@@ -7,6 +7,20 @@ Programa para Windows que convierte una canción (**MP4, MP3, WAV**, también M4
 3. **Voz guía activable en cualquier momento**: el MP4 trae 2 pistas de audio, *Karaoke (sin voz)* y *Con voz guía*; se cambia en vivo desde el reproductor (VLC: tecla **B**; Reproductor multimedia de Windows: **⋯ › Idioma de audio**). También se exporta `_con_voz.mp3`.
 4. **Pista instrumental** (MP3 320 kbps) sin voz, opcionalmente **transpuesta** en semitonos.
 
+## Reproductor propio (v1.2)
+Botón **🎤 Reproductor / Biblioteca** (o al terminar de procesar): todas tus canciones procesadas, listas para cantar.
+- **Voz 0–100 %** en vivo (deslizador o tecla **V**): sin voz, voz guía bajita o completa.
+- **Tono** en vivo (+/−, en clave americana) y **velocidad** 50–125 % sin cambiar el tono ([ ]).
+- Letra dibujada en vivo con relleno palabra a palabra, **cuenta atrás al pulso** y aviso “la voz vuelve en X s”.
+- Barra de tiempo con marcas de versos, **repetir tramo A-B**, lista de versos (L), pantalla completa (F).
+- **Editor de sincronía** (E): mover un verso o toda la letra ±50 ms, o tocar Enter al ritmo; Ctrl+S guarda (y el próximo vídeo usa esa sincronía).
+
+## Más
+- **Cola**: elige varios archivos a la vez o pega varios enlaces separados por `;`.
+- **Cancelar** el proceso en curso.
+- **Elegir la letra** cuando LRCLIB tiene varias versiones; las **tildes** se recuperan de lo que oye la IA.
+- Aviso de **nueva versión** disponible.
+
 ## Cómo funciona
 | Paso | Herramienta |
 |---|---|

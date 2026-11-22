@@ -14,6 +14,13 @@ MODELS = paths.bundled_whisper_models() or ["tiny", "base", "small", "medium", "
 FILETYPES = [("Audio/Vídeo", "*.mp4 *.mp3 *.wav *.m4a *.flac *.mkv *.mov"), ("Todos", "*.*")]
 
 
+def _ver(v):
+    try:
+        return tuple(int(x) for x in v.split("."))
+    except ValueError:
+        return (0,)
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -39,7 +46,7 @@ class App(tk.Tk):
         f.pack(fill="both", expand=True)
         f.columnconfigure(1, weight=1)
 
-        ttk.Label(f, text="Archivo o enlace (YouTube…):").grid(row=0, column=0, sticky="w", **pad)
+        ttk.Label(f, text="Archivo(s) o enlace(s):").grid(row=0, column=0, sticky="w", **pad)
         ttk.Entry(f, textvariable=self.in_var).grid(row=0, column=1, sticky="ew", **pad)
         ttk.Button(f, text="Buscar…", command=self.pick_in).grid(row=0, column=2, **pad)
 
@@ -83,8 +90,19 @@ class App(tk.Tk):
         ttk.Label(ly, foreground="#666", text="Vacío = se busca automáticamente en LRCLIB y, si no está, se usa la "
                   "transcripción de la IA. Puede pegar o corregir la letra aquí.").grid(row=2, column=0, columnspan=5, sticky="w")
 
-        self.btn = ttk.Button(f, text="▶  Crear karaoke", command=self.start)
-        self.btn.grid(row=7, column=0, columnspan=3, sticky="ew", **pad)
+        bf = ttk.Frame(f)
+        bf.grid(row=7, column=0, columnspan=3, sticky="ew", **pad)
+        bf.columnconfigure(0, weight=1)
+        self.btn = ttk.Button(bf, text="▶  Crear karaoke", command=self.start)
+        self.btn.grid(row=0, column=0, sticky="ew")
+        self.cancel_btn = ttk.Button(bf, text="■ Cancelar", command=self.cancel, state="disabled")
+        self.cancel_btn.grid(row=0, column=1, padx=(6, 0))
+        ttk.Button(bf, text="🎤 Reproductor / Biblioteca", command=self.open_player).grid(row=0, column=2, padx=(6, 0))
+        self.update_lbl = ttk.Label(f, foreground="#06c", cursor="hand2")
+        self.update_lbl.grid(row=10, column=0, columnspan=3, sticky="w", padx=8)
+        self.cancel_event = threading.Event()
+        self.last_song = None
+        threading.Thread(target=self.check_update, daemon=True).start()
         self.bar = ttk.Progressbar(f, maximum=1.0)
         self.bar.grid(row=8, column=0, columnspan=3, sticky="ew", **pad)
 
@@ -97,7 +115,15 @@ class App(tk.Tk):
 
     # ---------------------------------------------------------------
     def pick_in(self):
-        p = filedialog.askopenfilename(filetypes=FILETYPES)
+        ps = filedialog.askopenfilenames(filetypes=FILETYPES)
+        if len(ps) > 1:
+            self.in_var.set(" ; ".join(ps))
+            self.artist_var.set("")
+            self.title_var.set("")
+            self.lyrics_box.delete("1.0", "end")
+            self.log(f"{len(ps)} canciones en la cola: se procesarán una tras otra.")
+            return
+        p = ps[0] if ps else ""
         if p:
             self.in_var.set(p)
             from .lyrics import guess_artist_title
@@ -154,12 +180,21 @@ class App(tk.Tk):
                 elif kind == "done":
                     self.busy = False
                     self.btn.configure(state="normal")
-                    if val:
-                        messagebox.showinfo("Karaoke Easy", "¡Karaoke creado!\n\n" + val)
+                    self.cancel_btn.configure(state="disabled")
+                    if val and messagebox.askyesno("Karaoke Easy", val + "\n\n¿Abrir ahora en el reproductor?"):
+                        self.open_player(self.last_song)
                 elif kind == "error":
                     self.busy = False
                     self.btn.configure(state="normal")
-                    messagebox.showerror("Error", val)
+                    self.cancel_btn.configure(state="disabled")
+                    if val:
+                        messagebox.showerror("Error", val)
+                elif kind == "update":
+                    tag, url = val
+                    self.update_lbl.configure(text=f"⬆ Hay una versión nueva ({tag}). Clic aquí para descargarla.")
+                    self.update_lbl.bind("<Button-1>", lambda e, u=url: __import__("webbrowser").open(u))
+                elif kind == "choose_lyrics":
+                    self.choose_lyrics(val)
         except queue.Empty:
             pass
         self.after(100, self.poll)
@@ -169,21 +204,27 @@ class App(tk.Tk):
             try:
                 fn()
             except Exception as e:
+                from .pipeline import Cancelled
+                if isinstance(e, Cancelled):
+                    self.log("⏹ " + str(e))
+                    self.q.put(("error", ""))
+                    return
                 self.log(traceback.format_exc())
                 self.q.put(("error", str(e)))
         threading.Thread(target=wrap, daemon=True).start()
 
-    def resolve_input(self):
+    def resolve_input(self, src=None):
         """Si la entrada es un enlace, lo descarga (en el hilo de trabajo) y devuelve la ruta local."""
         from .downloader import download, is_url
 
-        src = self.in_var.get().strip()
+        src = (src if src is not None else self.in_var.get()).strip()
         if not is_url(src):
             return src, "", ""
         out = Path(self.out_var.get()) / "descargas"
         path, artist, title = download(src, out, want_video=self.video_var.get(), log=self.log,
                                        progress=lambda p: self.q.put(("prog", p)))
-        self.q.put(("downloaded", (str(path), artist, title)))
+        if len(self.items()) == 1:
+            self.q.put(("downloaded", (str(path), artist, title)))
         return str(path), artist, title
 
     def analyze(self):
@@ -216,40 +257,130 @@ class App(tk.Tk):
 
         def job():
             from . import lyrics
-            r = lyrics.search(self.artist_var.get().strip(), self.title_var.get().strip())
-            if not r:
+            res = lyrics.search_all(self.artist_var.get().strip(), self.title_var.get().strip())
+            if not res:
                 self.log("No se encontró la letra. Puede pegarla en el cuadro.")
                 return
-            self.log(f"Letra encontrada: {r.get('artistName')} - {r.get('trackName')} ({r.get('albumName')})")
-            self.q.put(("lyrics", r.get("syncedLyrics") or r.get("plainLyrics")))
+            if len(res) == 1:
+                r = res[0]
+                self.log(f"Letra encontrada: {r.get('artistName')} - {r.get('trackName')} ({r.get('albumName')})")
+                self.q.put(("lyrics", r.get("syncedLyrics") or r.get("plainLyrics")))
+            else:
+                self.log(f"{len(res)} versiones de la letra encontradas: elija una.")
+                self.q.put(("choose_lyrics", res[:15]))
         self._thread(job)
+
+    def items(self):
+        import re
+        return [p.strip() for p in re.split(r"\s*;\s*|\n", self.in_var.get()) if p.strip()]
+
+    def cancel(self):
+        self.cancel_event.set()
+        self.log("Cancelando… (se detiene al terminar el paso actual)")
+
+    def open_player(self, song_id=None):
+        from .player_main import launch
+        launch(song_id, extra_dirs=[self.out_var.get()])
+
+    def check_update(self):
+        try:
+            import json
+            import urllib.request
+            req = urllib.request.Request("https://api.github.com/repos/Rixmerz/Karaoke-easy/releases/latest",
+                                         headers={"User-Agent": "KaraokeEasy"})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                rel = json.load(r)
+            latest = rel.get("tag_name", "").lstrip("v")
+            if latest and _ver(latest) > _ver(paths.app_version()):
+                self.q.put(("update", (rel["tag_name"], rel.get("html_url"))))
+        except Exception:
+            pass
+
+    def choose_lyrics(self, results):
+        win = tk.Toplevel(self)
+        win.title("Elija la versión de la letra")
+        win.geometry("640x380")
+        lb = tk.Listbox(win, activestyle="dotbox")
+        lb.pack(fill="both", expand=True, padx=8, pady=8)
+        for r in results:
+            d = r.get("duration") or 0
+            sync = "🕒 sincronizada" if r.get("syncedLyrics") else "texto"
+            lb.insert("end", f"{r.get('artistName')} — {r.get('trackName')}  ·  {r.get('albumName') or ''}  ·  "
+                             f"{int(d) // 60}:{int(d) % 60:02d}  ·  {sync}")
+        lb.selection_set(0)
+
+        def ok(_=None):
+            sel = lb.curselection()
+            if sel:
+                r = results[sel[0]]
+                self.lyrics_box.delete("1.0", "end")
+                self.lyrics_box.insert("1.0", r.get("syncedLyrics") or r.get("plainLyrics"))
+                self.log(f"Letra elegida: {r.get('artistName')} - {r.get('trackName')} ({r.get('albumName')})")
+            win.destroy()
+        lb.bind("<Double-1>", ok)
+        ttk.Button(win, text="Usar esta letra", command=ok).pack(pady=(0, 8))
 
     def start(self):
         if self.busy:
             return
         from .downloader import is_url
-        path = self.in_var.get().strip()
-        if not is_url(path) and not Path(path).is_file():
-            return messagebox.showwarning("Karaoke Easy", "Seleccione un archivo MP4, MP3 o WAV, o pegue un enlace.")
+        items = self.items()
+        bad = [p for p in items if not is_url(p) and not Path(p).is_file()]
+        if not items or bad:
+            return messagebox.showwarning("Karaoke Easy", "Seleccione archivos MP4/MP3/WAV o pegue enlaces"
+                                          + (f"\n\nNo encontrado: {bad[0]}" if bad else ""))
         from .pipeline import KaraokeBuilder, Options
 
-        opts = Options(input_path=path, output_dir=self.out_var.get(), semitones=int(self.st_var.get()),
-                       whisper_model=self.model_var.get(), language=LANGS[self.lang_var.get()],
-                       use_source_video=self.video_var.get(), guide_track=self.guide_var.get(),
-                       lyrics_text=self.lyrics_box.get("1.0", "end").strip() or None)
+        single = len(items) == 1
+        base = dict(output_dir=self.out_var.get(), semitones=int(self.st_var.get()),
+                    whisper_model=self.model_var.get(), language=LANGS[self.lang_var.get()],
+                    use_source_video=self.video_var.get(), guide_track=self.guide_var.get())
+        lyrics_text = self.lyrics_box.get("1.0", "end").strip() or None if single else None
+        artist, title = self.artist_var.get().strip(), self.title_var.get().strip()
         self.busy = True
+        self.cancel_event.clear()
         self.btn.configure(state="disabled")
+        self.cancel_btn.configure(state="normal")
 
         def job():
-            opts.input_path, opts.artist_hint, opts.title_hint = self.resolve_input()
-            if self.title_var.get().strip() and not opts.title_hint:
-                opts.artist_hint, opts.title_hint = self.artist_var.get().strip(), self.title_var.get().strip()
-            b = KaraokeBuilder(opts, log=self.log, progress=lambda p: self.q.put(("prog", p)))
-            video, mp3 = b.run()
-            self.q.put(("key", (*b.key, 1.0)))
-            self.q.put(("done", f"Vídeo: {video}\nPista: {mp3}"))
-        self._thread(job)
+            import time
+            done, failed = [], []
+            for i, src in enumerate(items, 1):
+                if self.cancel_event.is_set():
+                    break
+                if not single:
+                    self.log(f"\n===== Canción {i} de {len(items)}: {src} =====")
+                t0 = time.time()
+                try:
+                    opts = Options(input_path=src, lyrics_text=lyrics_text, **base)
+                    opts.input_path, opts.artist_hint, opts.title_hint = self.resolve_input(src)
+                    if single and title and not opts.title_hint:
+                        opts.artist_hint, opts.title_hint = artist, title
 
+                    def prog(p, i=i):
+                        self.q.put(("prog", ((i - 1) + p) / len(items)))
+                    b = KaraokeBuilder(opts, log=self.log, progress=prog, cancel_event=self.cancel_event)
+                    video, mp3 = b.run()
+                    self.q.put(("key", (*b.key, 1.0)))
+                    if b.package is not None:
+                        from .library import song_id
+                        self.last_song = song_id(b.package)
+                    done.append(video)
+                    self.log(f"Tiempo: {int(time.time() - t0) // 60} min {int(time.time() - t0) % 60} s")
+                except Exception as e:
+                    from .pipeline import Cancelled
+                    if isinstance(e, Cancelled) or single:
+                        raise
+                    failed.append(src)
+                    self.log(f"✖ Error con {src}: {e}")
+            if not done:
+                self.q.put(("error", "" if self.cancel_event.is_set() else "No se pudo procesar ninguna canción."))
+                return
+            msg = f"¡Listo! {len(done)} karaoke(s) creado(s)." + (f"\nCon errores: {len(failed)}" if failed else "")
+            if single:
+                msg = f"¡Karaoke creado!\n\nVídeo: {done[0]}"
+            self.q.put(("done", msg))
+        self._thread(job)
 
 def main():
     import multiprocessing

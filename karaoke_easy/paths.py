@@ -41,3 +41,12 @@ def whisper_dir(name: str) -> Path:
 def bundled_whisper_models():
     order = ["tiny", "base", "small", "medium", "large-v3"]
     return [m for m in order if (whisper_dir(m) / "model.bin").exists()]
+
+
+def app_version() -> str:
+    for c in (app_dir() / "VERSION", Path(__file__).resolve().parent.parent / "VERSION"):
+        try:
+            return c.read_text(encoding="utf-8").strip()
+        except OSError:
+            pass
+    return "0"

@@ -60,8 +60,14 @@ def _device(pref):
         return "cpu"
 
 
+class Cancelled(Exception):
+    pass
+
+
 class KaraokeBuilder:
-    def __init__(self, opts: Options, log=print, progress=lambda p: None):
+    def __init__(self, opts: Options, log=print, progress=lambda p: None, cancel_event=None):
+        self.cancel_event = cancel_event
+        self.package = None
         from .downloader import download, is_url
 
         if is_url(opts.input_path):
@@ -369,15 +375,23 @@ class KaraokeBuilder:
         return out
 
     # -------------------------------------------------------------------
+    def check_cancel(self):
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            raise Cancelled("Proceso cancelado por el usuario.")
+
     def run(self):
         steps = 6
         self.progress(0)
         wav = self.extract_audio(); self.progress(1 / steps)
+        self.check_cancel()
         inst, voc = self.separate(wav); self.progress(2 / steps)
+        self.check_cancel()
         words = self.transcribe(voc)
         words = self.fit_rhythm(words, inst, voc); self.progress(3 / steps)
+        self.check_cancel()
         self.detect_key(inst)
         track = self.transpose(inst); self.progress(4 / steps)
+        self.check_cancel()
         suffix = "" if self.o.semitones == 0 else f"_{music.key_name(self.key[0] + self.o.semitones, self.key[1])}"
         suffix = suffix.replace("#", "s")
         guide = None
@@ -386,7 +400,13 @@ class KaraokeBuilder:
             guide = self.guide_mix(track, self.transpose(voc, label=False))
             self.export_audio(guide, suffix, "con_voz")
         mp3 = self.export_audio(track, suffix); self.progress(5 / steps)
-        video = self.render(words, track, suffix, guide); self.progress(1)
+        self.check_cancel()
+        video = self.render(words, track, suffix, guide)
+        self.check_cancel()
+        self.log("Preparando la canción para el reproductor…")
+        from .library import write_package
+        self.package = write_package(self, words, inst, voc, run_ffmpeg)
+        self.progress(1)
         self.words = words
         self.log(f"Listo:\n  Vídeo: {video}\n  Pista: {mp3}")
         if guide is not None:
