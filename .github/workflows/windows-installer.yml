@@ -4,8 +4,8 @@ name: Instalador Windows
 # o a mano. En cada push normal corren solo las pruebas rápidas (tests.yml).
 on:
   push:
+    branches: ["**"]   # sin esto, al declarar 'tags' GitHub ignora los push a ramas
     paths: ["VERSION"]
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:

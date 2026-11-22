@@ -9,6 +9,10 @@ for pkg in ["demucs", "faster_whisper", "ctranslate2", "imageio_ffmpeg", "soxr",
     except Exception:
         pass
 datas += collect_data_files("librosa") + collect_data_files("lazy_loader")
+# Deno (motor JavaScript que yt-dlp necesita para YouTube): el paquete pip lo deja como ejecutable
+# en Scripts/, fuera del paquete, así que se añade explícitamente.
+import deno as _deno
+binaries += [(_deno.find_deno_bin(), "deno")]
 hidden += ["sklearn.utils._typedefs", "sklearn.neighbors._partition_nodes", "scipy.special.cython_special"]
 
 a = Analysis(["run.py"], pathex=["."], binaries=binaries, datas=datas, hiddenimports=hidden,
