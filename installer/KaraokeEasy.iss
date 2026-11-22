@@ -53,5 +53,11 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\KaraokeEasy.exe"; Tasks: desk
 
 [Run]
 Filename: "{app}\KaraokeEasy.exe"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
-; actualización automática (instalación silenciosa): volver a abrir la app
-Filename: "{app}\KaraokeEasy.exe"; Flags: nowait; Check: WizardSilent
+; actualización automática desde la app (/RELAUNCH): volver a abrirla al terminar
+Filename: "{app}\KaraokeEasy.exe"; Flags: nowait; Check: ShouldRelaunch
+
+[Code]
+function ShouldRelaunch: Boolean;
+begin
+  Result := WizardSilent and (Pos('/RELAUNCH', UpperCase(GetCmdTail)) > 0);
+end;

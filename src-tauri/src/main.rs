@@ -48,7 +48,7 @@ fn run_installer(app: tauri::AppHandle, path: String) -> Result<(), String> {
         return Err("instalador no permitido".into());
     }
     Command::new(&p)
-        .args(["/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS"])
+        .args(["/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS", "/RELAUNCH"])
         .spawn()
         .map_err(|e| format!("no se pudo iniciar el instalador: {e}"))?;
     app.exit(0);
