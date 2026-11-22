@@ -69,24 +69,27 @@ jobs:
         shell: pwsh
         run: |
           if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
-          $ver = "${{ inputs.version }}"; if (-not $ver) { $ver = "1.0.0" }
+          $ver = "${{ inputs.version }}"; if (-not $ver) { $ver = (Get-Content VERSION).Trim() }
+          "APP_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$ver" installer\KaraokeEasy.iss
       - uses: actions/upload-artifact@v4
         with:
           name: KaraokeEasy-Setup
           path: Output/*.exe
           compression-level: 0
-      - name: Publicar release (tags v* o ejecución manual con versión)
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.version != ''
+      - name: Publicar Release (automático en cada build correcto)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.version != '' && format('v{0}', inputs.version) || github.ref_name }}
+          tag_name: v${{ env.APP_VERSION }}
           target_commitish: ${{ github.sha }}
-          name: Karaoke Easy ${{ inputs.version != '' && inputs.version || github.ref_name }}
+          name: Karaoke Easy ${{ env.APP_VERSION }}
+          make_latest: true
           body: |
             Instalador para Windows 10/11 (64 bits) con todos los modelos incluidos: no necesita Python ni internet para procesar (solo para buscar la letra en LRCLIB).
 
-            1. Descarga `KaraokeEasy-Setup-*.exe` y ejecútalo (si SmartScreen avisa: "Más información" → "Ejecutar de todas formas").
+            1. Descarga `KaraokeEasy-Setup-${{ env.APP_VERSION }}.exe` (abajo, en *Assets*) y ejecútalo. Si SmartScreen avisa: "Más información" → "Ejecutar de todas formas".
             2. Siguiente → Instalar → abre **Karaoke Easy**.
             3. Elige tu MP3/MP4/WAV → (opcional) *Analizar tono* y semitonos → **Crear karaoke**.
+
+            Compilado desde ${{ github.sha }}.
           files: Output/*.exe
