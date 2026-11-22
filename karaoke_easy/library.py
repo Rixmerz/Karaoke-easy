@@ -155,3 +155,13 @@ def _hidden():
         return set(json.loads((paths.user_cache() / "ocultas.json").read_text(encoding="utf-8")))
     except Exception:
         return set()
+
+
+def edit_meta(folder: Path, title=None, artist=None):
+    j = Path(folder) / SONG
+    meta = json.loads(j.read_text(encoding="utf-8"))
+    if title:
+        meta["title"] = title
+    if artist is not None:
+        meta["artist"] = artist
+    j.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")

@@ -232,6 +232,13 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
             if parts == ["api", "settings"]:
                 from . import settings
                 return self._json(settings.save(self._body()))
+            if parts == ["api", "edit"]:
+                folder = songs.folder(q.get("id", [""])[0])
+                if folder is None:
+                    return self._json({"error": "canción no encontrada"}, 404)
+                b = self._body()
+                library.edit_meta(folder, (b.get("title") or "").strip() or None, (b.get("artist") or "").strip())
+                return self._json({"ok": True})
             if parts == ["api", "delete"]:
                 folder = songs.folder(q.get("id", [""])[0])
                 if folder is None:

@@ -9,12 +9,12 @@
 <body>
 <div class="app">
   <aside class="side">
-    <div class="logo"><div class="mark">🎤</div><span class="lbl">Karaoke Easy</span></div>
+    <div class="logo"><div class="mark"><i data-icon="mic" data-size="20"></i></div><span class="lbl">Karaoke Easy</span></div>
     <nav class="nav">
-      <button data-view="library" class="on"><span class="ico">📚</span><span class="lbl">Biblioteca</span></button>
-      <button data-view="new"><span class="ico">＋</span><span class="lbl">Nueva canción</span></button>
-      <button data-view="jobs"><span class="ico">⏳</span><span class="lbl">En proceso</span><span class="badge" id="jobsBadge" hidden>0</span></button>
-      <button data-view="settings"><span class="ico">⚙️</span><span class="lbl">Ajustes</span></button>
+      <button data-view="library" class="on"><span class="ico"><i data-icon="library"></i></span><span class="lbl">Biblioteca</span></button>
+      <button data-view="new"><span class="ico"><i data-icon="plus"></i></span><span class="lbl">Nueva canción</span></button>
+      <button data-view="jobs"><span class="ico"><i data-icon="loader-circle"></i></span><span class="lbl">En proceso</span><span class="badge" id="jobsBadge" hidden>0</span></button>
+      <button data-view="settings"><span class="ico"><i data-icon="settings"></i></span><span class="lbl">Ajustes</span></button>
     </nav>
     <div class="update" id="updateBox"></div>
     <div class="foot">Versión <span id="ver">—</span></div>
@@ -27,13 +27,13 @@
         <div class="grow"><h1>Biblioteca</h1><p class="sub" id="libCount"></p></div>
         <input class="field search" id="libSearch" placeholder="Buscar canción o artista…">
         <select class="field" id="libSort"><option value="recent">Recientes</option><option value="title">Título A–Z</option><option value="artist">Artista A–Z</option></select>
-        <button class="btn pri" data-go="new">＋ Nueva canción</button>
+        <button class="btn pri" data-go="new"><i data-icon="plus"></i> Nueva canción</button>
       </div>
       <div class="grid" id="libGrid"></div>
       <div class="empty" id="libEmpty" hidden>
-        <div class="big">🎶</div><h2>Tu biblioteca está vacía</h2>
+        <div class="big"><i data-icon="music" data-size="56"></i></div><h2>Tu biblioteca está vacía</h2>
         <p>Añade una canción (archivo o enlace) y aparecerá aquí lista para cantar.</p>
-        <button class="btn pri" data-go="new">＋ Añadir mi primera canción</button>
+        <button class="btn pri" data-go="new"><i data-icon="plus"></i> Añadir mi primera canción</button>
       </div>
     </section>
 
@@ -41,7 +41,7 @@
     <section class="view" id="v-new">
       <div class="head"><div class="grow"><h1>Nueva canción</h1><p class="sub">Arrastra archivos, elígelos o pega enlaces. Puedes añadir varias a la vez.</p></div></div>
       <div class="drop" id="drop">
-        <div class="big">🎵</div>
+        <div class="big"><i data-icon="upload" data-size="46"></i></div>
         <h2>Arrastra aquí tus canciones</h2>
         <div class="sub">MP3, MP4, WAV, M4A, FLAC… o <u>haz clic para elegir</u></div>
       </div>
@@ -77,8 +77,8 @@
       <div class="head"><div class="grow"><h1>En proceso</h1><p class="sub">Puedes seguir usando la app mientras se preparan tus canciones.</p></div>
         <button class="btn ghost sm" id="clearJobs">Limpiar terminados</button></div>
       <div class="jobs" id="jobsList"></div>
-      <div class="empty" id="jobsEmpty"><div class="big">✨</div><h2>Nada en proceso</h2><p>Las canciones que añadas aparecerán aquí mientras se preparan.</p>
-        <button class="btn pri" data-go="new">＋ Nueva canción</button></div>
+      <div class="empty" id="jobsEmpty"><div class="big"><i data-icon="sparkles" data-size="52"></i></div><h2>Nada en proceso</h2><p>Las canciones que añadas aparecerán aquí mientras se preparan.</p>
+        <button class="btn pri" data-go="new"><i data-icon="plus"></i> Nueva canción</button></div>
     </section>
 
     <!-- AJUSTES -->
@@ -108,30 +108,33 @@
   <div id="stage"><video id="bgvideo" muted playsinline preload="auto"></video></div>
   <div id="ptitle"><h1 id="t1"></h1><h2 id="t2"></h2></div>
   <div id="lyrics"><div id="wait"></div><div id="dots"></div><div class="line" id="L0"></div><div class="line next" id="L1"></div></div>
-  <div id="ptop"><button class="pb" id="back">← Biblioteca</button><span style="flex:1"></span><button class="pb" id="listBtn" title="Lista de versos (L)">☰ Letra</button><button class="pb" id="editBtn" title="Ajustar sincronía (E)">✏️ Ajustar</button><button class="pb" id="fsBtn" title="Pantalla completa (F)">⛶</button></div>
+  <div id="ptop"><button class="pb" id="back"><i data-icon="arrow-left"></i> Biblioteca</button><span style="flex:1"></span><button class="pb" id="listBtn" title="Lista de versos (L)"><i data-icon="list-music"></i> Letra</button><button class="pb" id="editBtn" title="Ajustar sincronía (E)"><i data-icon="pencil"></i> Ajustar</button><button class="pb" id="fsBtn" title="Pantalla completa (F)"><i data-icon="maximize"></i></button></div>
   <div id="edit">
-    <b>✏️ Ajustar sincronía</b> — se guarda con <kbd>Ctrl</kbd>+<kbd>S</kbd><br>
+    <b><i data-icon="pencil" data-size="14"></i> Ajustar sincronía</b> — se guarda con <kbd>Ctrl</kbd>+<kbd>S</kbd><br>
     <kbd>,</kbd>/<kbd>.</kbd> mover el verso actual −/+ 50 ms · <kbd>Shift</kbd>+<kbd>,</kbd>/<kbd>.</kbd> toda la letra<br>
     <kbd>Enter</kbd> “aquí empieza el verso siguiente” (al ritmo)<br>
-    <div style="margin-top:6px"><button class="pb" id="saveBtn">💾 Guardar</button> <button class="pb" id="undoBtn">↶ Deshacer</button> <span id="editInfo"></span></div>
+    <div style="margin-top:6px"><button class="pb" id="saveBtn"><i data-icon="save" data-size="14"></i> Guardar</button> <button class="pb" id="undoBtn"><i data-icon="undo-2" data-size="14"></i> Deshacer</button> <span id="editInfo"></span></div>
   </div>
   <div id="side"><h3 style="margin:0 0 10px">Letra</h3><div id="lineList"></div></div>
   <div id="pbar">
     <div id="seekwrap"><div id="marks"></div><div id="ab"></div><input id="seek" type="range" min="0" max="1000" value="0" step="1"></div>
     <div class="prow">
-      <button class="pb" id="play" title="Reproducir / pausa (Espacio)">▶</button>
+      <button class="pb" id="play" title="Reproducir / pausa (Espacio)"></button>
       <span id="time">0:00 / 0:00</span>
-      <div class="grp" title="Volumen de la voz original (V)"><label>🎙️ Voz</label><input id="voice" type="range" min="0" max="100" value="0" style="width:130px"><span class="val" id="voiceV">0 %</span></div>
-      <div class="grp" title="Tono (+ / −)"><label>🎼 Tono</label><button class="pb" id="pDown">−</button><span class="val" id="pitchV">0</span><button class="pb" id="pUp">+</button></div>
-      <div class="grp" title="Velocidad ([ / ])"><label>⏱️ Velocidad</label><button class="pb" id="sDown">−</button><span class="val" id="speedV">100 %</span><button class="pb" id="sUp">+</button></div>
-      <div class="grp" title="Repetir tramo: A inicio, B fin, Esc quita"><label>🔁</label><button class="pb" id="aBtn">A</button><button class="pb" id="bBtn">B</button><button class="pb" id="abClear">✕</button></div>
-      <div class="grp"><label>🔊</label><input id="vol" type="range" min="0" max="100" value="100" style="width:90px"></div>
+      <div class="grp" title="Volumen de la voz original (V)"><label><i data-icon="mic" data-size="15"></i> Voz</label><input id="voice" type="range" min="0" max="100" value="0" style="width:130px"><span class="val" id="voiceV">0 %</span></div>
+      <div class="grp" title="Tono (+ / −)"><label><i data-icon="music-2" data-size="15"></i> Tono</label><button class="pb" id="pDown">−</button><span class="val" id="pitchV">0</span><button class="pb" id="pUp">+</button></div>
+      <div class="grp" title="Velocidad ([ / ])"><label><i data-icon="gauge" data-size="15"></i> Velocidad</label><button class="pb" id="sDown">−</button><span class="val" id="speedV">100 %</span><button class="pb" id="sUp">+</button></div>
+      <div class="grp" title="Repetir tramo: A inicio, B fin, Esc quita"><label><i data-icon="repeat" data-size="15"></i></label><button class="pb" id="aBtn">A</button><button class="pb" id="bBtn">B</button><button class="pb" id="abClear" title="Quitar tramo"><i data-icon="x" data-size="15"></i></button></div>
+      <div class="grp"><label><i data-icon="volume-2" data-size="15"></i></label><input id="vol" type="range" min="0" max="100" value="100" style="width:90px"></div>
     </div>
     <div id="help">Espacio play/pausa · V voz · ↑↓ volumen de voz · ←→ ±5 s · +/− tono · [ ] velocidad · A/B repetir · F pantalla completa · L letra · E ajustar · Esc salir</div>
   </div>
 </div>
 <div id="loading"><div class="spin"></div><span id="loadingTxt">Cargando…</span></div>
+<div id="splash"><div class="mark big"><i data-icon="mic" data-size="44"></i></div><h1>Karaoke Easy</h1><div class="spin"></div><p id="splashTxt">Iniciando…</p></div>
+<div class="modal" id="modal"><div class="box"><h2 id="mTitle"></h2><div id="mBody"></div><div class="cta" id="mBtns"></div></div></div>
 <div id="toasts"></div>
+<script src="icons.js"></script>
 <script src="app.js"></script>
 <script src="player.js"></script>
 </body>

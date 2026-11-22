@@ -22,6 +22,24 @@ function toast(msg, kind = "", ms = 3500) {
   const t = document.createElement("div"); t.className = "toast " + kind; t.textContent = msg;
   $("toasts").appendChild(t); setTimeout(() => t.remove(), ms);
 }
+function modal(title, body, buttons) {
+  $("mTitle").textContent = title; $("mBody").innerHTML = body; const B = $("mBtns"); B.innerHTML = "";
+  for (const b of buttons) {
+    const el = document.createElement("button"); el.className = "btn " + (b.primary ? "pri" : "ghost"); el.innerHTML = b.label;
+    el.onclick = async () => { if (b.onclick && (await b.onclick()) === false) return; closeModal(); }; B.appendChild(el);
+  }
+  $("modal").classList.add("on"); setTimeout(() => $("mBody").querySelector("input,textarea,select")?.focus(), 50);
+}
+function closeModal() { $("modal").classList.remove("on"); }
+$("modal").onclick = e => { if (e.target.id === "modal") closeModal(); };
+function editSong(s) {
+  modal("Editar canción", `<label>Título</label><input class="field" id="eTitle" value="${esc(s.title || "")}">
+    <label>Artista</label><input class="field" id="eArtist" value="${esc(s.artist || "")}">`, [
+    { label: "Cancelar" },
+    { label: "Guardar", primary: true, onclick: async () => {
+        await api("edit?id=" + s.id, { title: $("eTitle").value.trim(), artist: $("eArtist").value.trim() });
+        toast("Guardado", "ok", 1500); loadLibrary(); } }]);
+}
 function loading(on, txt) { $("loading").style.display = on ? "flex" : "none"; if (txt) $("loadingTxt").textContent = txt; }
 
 // ---------------- navegación ----------------
@@ -53,9 +71,9 @@ function renderLibrary() {
     const bg = s.cover ? `background-image:url('${media(s.id, "cover.jpg")}')`
       : `background:linear-gradient(135deg,hsl(${h} 70% 45%),hsl(${(h + 60) % 360} 70% 22%))`;
     c.innerHTML = `<div class="cover" style="${bg}">${s.cover ? "" : `<span class="ini">${esc((s.title || "?")[0].toUpperCase())}</span>`}
-      <div class="playo"><span>▶</span></div></div><button class="more" title="Más opciones">⋯</button>
+      <div class="playo"><span>${icon("play", 24)}</span></div></div><button class="more" title="Más opciones">${icon("ellipsis")}</button>
       <div class="meta"><b>${esc(s.title || "(sin título)")}</b><span>${esc(s.artist || "Artista desconocido")}</span>
-      <div class="chips">${s.key ? `<span class="chip">🎼 ${esc(s.key)}</span>` : ""}${s.duration ? `<span class="chip">${fmt(s.duration)}</span>` : ""}</div></div>`;
+      <div class="chips">${s.key ? `<span class="chip">${icon("music-2", 12)} ${esc(s.key)}</span>` : ""}${s.duration ? `<span class="chip">${fmt(s.duration)}</span>` : ""}</div></div>`;
     c.onclick = () => openSong(s.id);
     c.querySelector(".more").onclick = e => { e.stopPropagation(); songMenu(e, s); };
     g.appendChild(c);
@@ -66,11 +84,12 @@ $("libSearch").oninput = renderLibrary; $("libSort").onchange = renderLibrary;
 function songMenu(e, s) {
   closeMenu();
   const m = document.createElement("div"); m.className = "menu"; m.id = "menu";
-  m.innerHTML = `<button data-a="play">▶ Cantar</button><button data-a="folder">📂 Abrir carpeta</button><button data-a="remove">🗑 Quitar de la biblioteca</button>`;
+  m.innerHTML = `<button data-a="play">${icon("play", 15)} Cantar</button><button data-a="edit">${icon("pencil", 15)} Editar título y artista</button><button data-a="folder">${icon("folder-open", 15)} Abrir carpeta</button><button data-a="remove">${icon("trash-2", 15)} Quitar de la biblioteca</button>`;
   m.style.left = Math.min(e.clientX, innerWidth - 210) + "px"; m.style.top = e.clientY + "px";
   m.onclick = async ev => {
     const a = ev.target.dataset.a; closeMenu();
     if (a === "play") openSong(s.id);
+    if (a === "edit") editSong(s);
     if (a === "folder") openPath(s.folder.replace(/[\\/]reproductor$/, ""));
     if (a === "remove") { await api("delete?id=" + s.id, {}); toast("Quitada de la biblioteca (los archivos se conservan)"); loadLibrary(); }
   };
@@ -113,7 +132,7 @@ function renderQueue() {
   const box = $("queue"); box.innerHTML = "";
   QUEUE.forEach((x, i) => {
     const d = document.createElement("div"); d.className = "qi";
-    d.innerHTML = `<span>${/^(https?:|www\.)/i.test(x) ? "🔗" : "🎵"}</span><span class="n">${esc(nameOf(x))}</span><button class="x" title="Quitar">✕</button>`;
+    d.innerHTML = `<span style="color:var(--mut)">${icon(/^(https?:|www\.)/i.test(x) ? "link" : "file-audio")}</span><span class="n">${esc(nameOf(x))}</span><button class="x" title="Quitar">${icon("x", 16)}</button>`;
     d.querySelector(".x").onclick = () => { QUEUE.splice(i, 1); renderQueue(); };
     box.appendChild(d);
   });
@@ -142,8 +161,14 @@ if (T?.webview) {
 document.addEventListener("dragover", e => e.preventDefault());
 document.addEventListener("drop", e => e.preventDefault());
 document.addEventListener("paste", e => {
-  if (!$("v-new").classList.contains("on") || ["TEXTAREA", "INPUT"].includes(e.target.tagName)) return;
-  const t = e.clipboardData.getData("text"); if (/https?:\/\//.test(t)) { addInputs(t.split(/\s+/)); }
+  if ($("player").classList.contains("on") || ["TEXTAREA", "INPUT"].includes(e.target.tagName)) return;
+  const t = e.clipboardData.getData("text"); if (/https?:\/\//.test(t)) { go("new"); addInputs(t.split(/\s+/)); toast("Enlace añadido", "ok", 1500); }
+});
+document.addEventListener("keydown", e => {
+  if ($("player").classList.contains("on")) return;
+  if ((e.ctrlKey || e.metaKey) && (e.key === "n" || e.key === "N")) { e.preventDefault(); go("new"); }
+  if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F")) { e.preventDefault(); go("library"); $("libSearch").focus(); }
+  if (e.key === "Escape") closeModal();
 });
 function updSt() { $("stV").textContent = semitones === 0 ? "Original" : (semitones > 0 ? "+" : "") + semitones + " semitono" + (Math.abs(semitones) > 1 ? "s" : ""); }
 $("stUp").onclick = () => { semitones = Math.min(6, semitones + 1); updSt(); };
@@ -155,8 +180,8 @@ $("lySearch").onclick = async () => {
     box.innerHTML = res.length ? "" : '<span class="sub">No se encontró. Puedes pegar la letra abajo.</span>';
     for (const r of res) {
       const b = document.createElement("button");
-      b.textContent = `${r.artist} — ${r.title} · ${r.album || ""} · ${r.duration ? fmt(r.duration) : ""} ${r.synced ? "· 🕒 sincronizada" : ""}`;
-      b.onclick = () => { $("lyText").value = r.text; box.innerHTML = '<span class="sub">✓ Letra elegida</span>'; };
+      b.textContent = `${r.artist} — ${r.title} · ${r.album || ""} · ${r.duration ? fmt(r.duration) : ""} ${r.synced ? "· sincronizada" : ""}`;
+      b.onclick = () => { $("lyText").value = r.text; box.innerHTML = `<span class="sub">${icon("check", 14)} Letra elegida</span>`; };
       box.appendChild(b);
     }
   } catch (e) { box.innerHTML = '<span class="sub">Sin conexión para buscar la letra.</span>'; }
@@ -199,7 +224,7 @@ function renderJobs() {
     const steps = j.steps.map((s, i) => {
       const cls = j.state === "done" || i < ci ? "done" : (i === ci && j.state === "running" ? "cur" : "");
       return (i ? `<div class="conn ${j.state === "done" || i <= ci ? "done" : ""}"></div>` : "") +
-        `<div class="st ${cls}"><div class="dot">${cls === "done" ? "✓" : i + 1}</div>${esc(s.name)}</div>`;
+        `<div class="st ${cls}"><div class="dot">${cls === "done" ? icon("check", 13) : i + 1}</div>${esc(s.name)}</div>`;
     }).join("");
     const label = { queued: "En espera", running: "Preparando", done: "Lista", error: "Error", cancelled: "Cancelada" }[j.state];
     const pct = Math.round(j.fraction * 100);
@@ -207,7 +232,7 @@ function renderJobs() {
     d.innerHTML = `<div class="top"><div class="t"><b>${esc(j.title)}</b><span>${esc(j.artist || "")}</span></div>
         <span class="state ${j.state}">${label}</span>
         ${j.state === "running" || j.state === "queued" ? `<button class="btn sm ghost" data-c="${j.id}">Cancelar</button>` : ""}
-        ${j.state === "done" && j.result?.song_id ? `<button class="btn sm pri" data-p="${j.result.song_id}">▶ Cantar</button><button class="btn sm" data-f="${esc(j.result.folder)}">📂</button>` : ""}</div>
+        ${j.state === "done" && j.result?.song_id ? `<button class="btn sm pri" data-p="${j.result.song_id}">${icon("play", 15)} Cantar</button><button class="btn sm" title="Abrir carpeta" data-f="${esc(j.result.folder)}">${icon("folder-open", 15)}</button>` : ""}</div>
       ${j.state === "cancelled" ? "" : `<div class="steps">${steps}</div>
       <div class="pbar"><i style="width:${pct}%"></i></div>
       <div class="pinfo"><span>${pct} %</span><span>${j.state === "running" ? eta(j.eta) : j.state === "queued" ? "esperando turno" : ""}</span></div>`}
@@ -222,7 +247,7 @@ function renderJobs() {
 $("clearJobs").onclick = async () => { await api("jobs/clear", {}); pollJobs(); };
 async function notifyDone(j) {
   const ok = j.state === "done";
-  toast(ok ? `🎤 “${j.title}” está lista para cantar` : `No se pudo preparar “${j.title}”`, ok ? "ok" : "err", 6000);
+  toast(ok ? `“${j.title}” está lista para cantar` : `No se pudo preparar “${j.title}”`, ok ? "ok" : "err", 6000);
   if (ok && $("v-library").classList.contains("on")) loadLibrary();
   try {
     const N = T?.notification; if (!N || document.hasFocus()) return;
@@ -263,7 +288,7 @@ async function checkUpdate(manual) {
     const r = await (await fetch("https://api.github.com/repos/Rixmerz/Karaoke-easy/releases/latest")).json();
     const v = (r.tag_name || "").replace(/^v/, "");
     if (v && newer(v, VERSION)) {
-      const box = $("updateBox"); box.style.display = "block"; box.innerHTML = `⬆ <b>Versión ${esc(v)} disponible</b><br>Haz clic para descargarla`;
+      const box = $("updateBox"); box.style.display = "block"; box.innerHTML = `${icon("download", 15)} <b>Versión ${esc(v)} disponible</b><br>Haz clic para actualizar`;
       box.onclick = () => T?.opener ? T.opener.openUrl(r.html_url) : open(r.html_url);
       if (manual) toast(`Hay una versión nueva: ${v}`, "ok");
     } else if (manual) toast("Ya tienes la última versión ✓", "ok");
@@ -271,9 +296,11 @@ async function checkUpdate(manual) {
 }
 
 // ---------------- arranque ----------------
+function splash(txt) { if (txt) $("splashTxt").textContent = txt; }
 async function boot() {
-  applyTheme();
+  applyTheme(); hydrateIcons(); $("play").innerHTML = icon("play", 20);
   if (T?.core) {
+    splash("Iniciando el motor…");
     const info = await T.core.invoke("engine_info");          // {url, token, selftest}
     API.base = info.url; API.token = info.token; window.SELFTEST = info.selftest;
   } else {
@@ -282,7 +309,9 @@ async function boot() {
   try { VERSION = (await api("version")).version; } catch (e) { }
   $("ver").textContent = VERSION; $("sAbout").textContent = "Karaoke Easy " + VERSION;
   await loadSettings().catch(() => { });
+  splash("Cargando tu biblioteca…");
   await loadLibrary();
+  $("splash").classList.add("hide"); setTimeout(() => $("splash").remove(), 400);
   pollJobs(); setInterval(pollJobs, 1000);
   setTimeout(() => checkUpdate(false), 4000);
   if (window.SELFTEST && T?.core) {      // prueba automática de la app instalada
@@ -290,4 +319,7 @@ async function boot() {
     await T.core.invoke("selftest_done", { ok });
   }
 }
-boot().catch(e => { document.body.insertAdjacentHTML("beforeend", `<div class="toast err" style="position:fixed;left:20px;bottom:20px">No se pudo iniciar el motor: ${esc(e.message || e)}</div>`); });
+boot().catch(e => {
+  splash("No se pudo iniciar Karaoke Easy: " + (e.message || e));
+  document.querySelector("#splash .spin")?.remove();
+});

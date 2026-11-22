@@ -44,8 +44,8 @@ function buildList(){const box=$("lineList");box.innerHTML="";lines.forEach((l,i
 function isPlaying(){return !inst.paused}
 async function play(){setupAudio();if(ctx.state==="suspended")await ctx.resume();
   voz.currentTime=inst.currentTime;if(song?.has_video)video.currentTime=inst.currentTime;
-  await Promise.all([inst.play(),voz.play(),song?.has_video?video.play().catch(()=>{}):null]);$("play").textContent="⏸"}
-function pause(){inst.pause();voz.pause();video.pause();$("play").textContent="▶"}
+  await Promise.all([inst.play(),voz.play(),song?.has_video?video.play().catch(()=>{}):null]);$("play").innerHTML=icon("pause",20)}
+function pause(){inst.pause();voz.pause();video.pause();$("play").innerHTML=icon("play",20)}
 function toggle(){isPlaying()?pause():play()}
 function waitMeta(ms=20000){return new Promise(res=>{if(inst.readyState>=1)return res(true);
   const done=ok=>{clearTimeout(to);inst.removeEventListener("loadedmetadata",h);res(ok)};const h=()=>done(true);
@@ -97,7 +97,7 @@ function tapNext(){const t=inst.currentTime,i=curLine(t)+1;if(i>=lines.length)re
   // mantener el orden: empujar los siguientes si se solapan
   for(let k=i+1;k<lines.length;k++){const d=lines[k-1][lines[k-1].length-1].s+0.1-lines[k][0].s;if(d>0)shiftLine(k,d);else break}
   toast(`Verso ${i+1} empieza en ${fmt(t)}`);drawMarks();buildList()}
-async function save(){try{await api(`save?id=${song.id}`,{lines});dirty=false;$("editInfo").textContent="guardado ✓";toast("Sincronía guardada","ok",1500)}
+async function save(){try{await api(`save?id=${song.id}`,{lines});dirty=false;$("editInfo").textContent="guardado";toast("Sincronía guardada","ok",1500)}
   catch(e){toast("Error al guardar","err")}}
 $("saveBtn").onclick=save;$("undoBtn").onclick=()=>{if(!undo.length)return;lines=JSON.parse(undo.pop());drawMarks();buildList();toast("Deshecho")};
 window.addEventListener("beforeunload",e=>{if(dirty){e.preventDefault();e.returnValue=""}});
@@ -155,7 +155,7 @@ function frame(){
   let dotsHtml="",wait="";
   if(upcoming){const st=upcoming[0].s,gap=st-prevEnd,left=st-t;
     if(gap>=4&&left>0){
-      if(left>8&&t>prevEnd+0.5)wait=`♪ instrumental — la voz vuelve en ${Math.ceil(left)} s`;
+      if(left>8&&t>prevEnd+0.5)wait=`Instrumental — la voz vuelve en ${Math.ceil(left)} s`;
       if(left<=4.2){const beats=song.beats||[];let ticks=[];
         const bi=beats.findIndex(b=>b>st+0.12);const j=(bi<0?beats.length:bi);
         if(j>=4){ticks=beats.slice(j-4,j)}if(ticks.length!==4||st-ticks[0]>5){ticks=[0,1,2,3].map(k=>st-4+k)}
