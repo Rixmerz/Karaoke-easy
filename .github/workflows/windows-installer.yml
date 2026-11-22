@@ -45,7 +45,14 @@ jobs:
         run: python tools/download_models.py small
       - name: PyInstaller
         run: pyinstaller --noconfirm KaraokeEasy.spec
-      - name: Prueba real del .exe (voz sintetica + musica, sin internet)
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+          $ver = "${{ inputs.version }}"; if (-not $ver) { $ver = (Get-Content VERSION).Trim() }
+          "APP_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$ver" installer\KaraokeEasy.iss
+      - name: Prueba real del programa INSTALADO (carpeta de solo lectura, sin internet, desde un enlace)
         shell: pwsh
         run: |
           Add-Type -AssemblyName System.Speech
@@ -55,6 +62,12 @@ jobs:
           $tts.Speak("Hello my friend. The sun is shining on the river. Tonight we sing together under the stars.")
           $tts.Dispose()
           python -c "import numpy as n,soundfile as s,librosa as l;v,_=l.load('voz.wav',sr=44100);sr=44100;intro=sr*6;L=intro+len(v)+sr*3;t=n.arange(L)/sr;m=sum(n.sin(2*n.pi*f*t) for f in [196,246.9,293.7,98])*0.12;x=m.copy();x[intro:intro+len(v)]+=v*0.9;s.write('cancion prueba.wav',n.stack([x,x],1),sr)"
+          # Instalar con el Setup.exe real, como un usuario
+          $setup = Get-ChildItem Output\KaraokeEasy-Setup-*.exe | Select-Object -First 1
+          Start-Process $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=C:\KE" -Wait
+          if (-not (Test-Path C:\KE\KaraokeEasy.exe)) { throw "El instalador no dejó KaraokeEasy.exe" }
+          # Carpeta de instalación de solo lectura (como C:\Program Files para un usuario normal)
+          icacls C:\KE /deny "*S-1-1-0:(OI)(CI)(W,AD,WD,DC)" /T /C /Q | Out-Null
           New-Item -ItemType Directory salida | Out-Null
           # Se procesa DESDE UN ENLACE (yt-dlp) servido localmente
           New-Item -ItemType Directory web | Out-Null; Copy-Item "cancion prueba.wav" web\
@@ -67,7 +80,7 @@ jobs:
           $env:KARAOKE_EXPECT = "friend sun shining river tonight sing together stars"
           # Sin internet: el proceso no debe descargar nada
           $env:HTTPS_PROXY = "http://127.0.0.1:9"; $env:HTTP_PROXY = "http://127.0.0.1:9"
-          $p = Start-Process dist\KaraokeEasy\KaraokeEasy.exe -Wait -PassThru -NoNewWindow
+          $p = Start-Process C:\KE\KaraokeEasy.exe -Wait -PassThru -NoNewWindow
           Stop-Process $srv.Id -ErrorAction SilentlyContinue
           Get-Content selftest.log
           if ($p.ExitCode -ne 0) { exit 1 }
@@ -80,13 +93,6 @@ jobs:
             salida/**/*.mp4
             salida/**/*.mp3
             salida/**/karaoke.ass
-      - name: Inno Setup
-        shell: pwsh
-        run: |
-          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
-          $ver = "${{ inputs.version }}"; if (-not $ver) { $ver = (Get-Content VERSION).Trim() }
-          "APP_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$ver" installer\KaraokeEasy.iss
       - uses: actions/upload-artifact@v4
         with:
           name: KaraokeEasy-Setup

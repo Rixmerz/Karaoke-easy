@@ -104,7 +104,10 @@ class KaraokeBuilder:
         from demucs.apply import apply_model
         from demucs.pretrained import get_model
 
-        model = get_model("htdemucs")
+        if (paths.DEMUCS_DIR / "htdemucs.yaml").exists():
+            model = get_model("htdemucs", repo=paths.DEMUCS_DIR)  # archivo incluido, sin escribir nada
+        else:
+            model = get_model("htdemucs")
         model.to(self.device).eval()
         data, sr = sf.read(str(wav), dtype="float32", always_2d=True)
         mix = torch.from_numpy(data.T.copy())

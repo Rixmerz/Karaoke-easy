@@ -15,8 +15,15 @@ os.environ["TORCH_HOME"] = str(paths.TORCH_HOME)
 
 from demucs.pretrained import get_model  # noqa: E402
 
+import shutil  # noqa: E402
+
 get_model("htdemucs")
-print("Demucs htdemucs OK ->", paths.TORCH_HOME)
+paths.DEMUCS_DIR.mkdir(parents=True, exist_ok=True)
+for th in (paths.TORCH_HOME / "hub" / "checkpoints").glob("955717e8-*.th"):
+    shutil.copy2(th, paths.DEMUCS_DIR / th.name)
+(paths.DEMUCS_DIR / "htdemucs.yaml").write_text("models: ['955717e8']\n", encoding="utf-8")
+assert list(paths.DEMUCS_DIR.glob("955717e8-*.th")), "no se encontraron los pesos de htdemucs"
+print("Demucs htdemucs OK ->", paths.DEMUCS_DIR)
 
 import torch  # noqa: E402
 from torchaudio.pipelines import MMS_FA  # noqa: E402
@@ -36,3 +43,6 @@ for name in sys.argv[1:] or ["base", "small"]:
     out = paths.whisper_dir(name)
     download_model(name, output_dir=str(out))
     print("Whisper", name, "OK ->", out)
+
+# No incluir la caché de torch.hub en el instalador (ya está copiado a models/demucs)
+shutil.rmtree(paths.TORCH_HOME, ignore_errors=True)

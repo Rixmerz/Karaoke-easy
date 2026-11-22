@@ -11,12 +11,26 @@ def app_dir() -> Path:
 
 
 MODELS_DIR = Path(os.environ.get("KARAOKE_MODELS", app_dir() / "models"))
-TORCH_HOME = MODELS_DIR / "torch"  # contiene hub/checkpoints/<pesos de htdemucs>.th
+TORCH_HOME = MODELS_DIR / "torch"  # solo al preparar los modelos (tools/download_models.py)
+DEMUCS_DIR = MODELS_DIR / "demucs"  # htdemucs.yaml + <firma>.th: se carga directo, sin torch.hub
+
+
+def user_cache() -> Path:
+    """Carpeta escribible del usuario. El programa NUNCA escribe en su carpeta de instalación
+    (C:\\Program Files es de solo lectura sin permisos de administrador)."""
+    base = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), ".cache")
+    p = Path(base) / "KaraokeEasy"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 def setup_offline():
-    """Hace que Demucs use los pesos incluidos en lugar de descargarlos."""
-    os.environ["TORCH_HOME"] = str(TORCH_HOME)
+    """Cachés de librerías en la carpeta del usuario; los modelos incluidos se leen directamente."""
+    if not (DEMUCS_DIR / "htdemucs.yaml").exists() and (TORCH_HOME / "hub").exists():
+        os.environ["TORCH_HOME"] = str(TORCH_HOME)  # instalación antigua/desarrollo
+    else:
+        os.environ["TORCH_HOME"] = str(user_cache() / "torch")
+    os.environ.setdefault("HF_HOME", str(user_cache() / "huggingface"))
     os.environ.setdefault("HF_HUB_OFFLINE", "1" if bundled_whisper_models() else "0")
 
 
