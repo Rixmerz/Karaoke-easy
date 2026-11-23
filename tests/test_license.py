@@ -117,12 +117,12 @@ def test_offline_grace_then_reconnect(mk):
     assert m.status()["state"] == "profesor"
 
 
-def test_revalidation_at_most_weekly(mk):
+def test_revalidation_at_most_daily(mk):
     m, ls, clock = mk()
     m.activate("KEY")
-    clock.t += 3 * DAY
+    clock.t += DAY // 2
     assert m.revalidate() is False
-    clock.t += 5 * DAY
+    clock.t += DAY
     assert m.revalidate() is True
     assert [c for c in ls.calls if c[0] == "validate"] == [("validate", "KEY")]
 
