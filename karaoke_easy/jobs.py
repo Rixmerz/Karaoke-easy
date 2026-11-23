@@ -36,8 +36,10 @@ def _worker(spec, q):
         src, artist, title = spec["input"], spec.get("artist", ""), spec.get("title", "")
         out_dir = spec["output_dir"]
         if is_url(src):
+            q.put(("dl", {"phase": "start"}))
             src, a, t = download(src, Path(out_dir) / "descargas", want_video=spec.get("use_source_video", True),
-                                 log=log, progress=lambda p: q.put(("sub", p)))
+                                 log=log, progress=lambda p: q.put(("sub", p)), status=lambda d: q.put(("dl", d)))
+            q.put(("dl", None))
             artist, title = artist or a, title or t
             q.put(("meta", {"title": title, "artist": artist}))
         opts = Options(input_path=src, output_dir=out_dir, semitones=spec.get("semitones", 0),
@@ -84,15 +86,21 @@ class Job:
         self.started = None
         self.finished = None
         self.proc = None
+        self.dl = None  # progreso de la descarga (enlaces)
 
     def fraction(self):
         if self.state == "done":
             return 1.0
         if self.step not in KEYS:
             return 0.0
+        weights = [w for _, _, w in STEPS]
+        if "://" in self.spec["input"] or self.spec["input"].lower().startswith("www."):
+            weights[0] = 0.20  # descargar el enlace es una parte importante del tiempo
+            tot = sum(weights)
+            weights = [w / tot for w in weights]
         i = KEYS.index(self.step)
-        done = sum(w for _, _, w in STEPS[:i])
-        w = STEPS[i][2]
+        done = sum(weights[:i])
+        w = weights[i]
         # avance dentro del paso: sub-progreso real si hay, si no, estimación suave por tiempo
         inside = self.sub
         if not inside and self.step_started:
@@ -112,7 +120,7 @@ class Job:
         return {"id": self.id, "title": self.title, "artist": self.artist, "state": self.state,
                 "step": self.step, "steps": [{"key": k, "name": n} for k, n, _ in STEPS],
                 "fraction": round(self.fraction(), 4), "eta": self.eta(), "error": self.error,
-                "result": self.result, "created": self.created, "log": self.log[-200:]}
+                "result": self.result, "created": self.created, "log": self.log[-200:], "download": self.dl}
 
 
 class JobManager:
@@ -160,6 +168,15 @@ class JobManager:
                 continue
             self._run(nxt, ctx)
 
+    @staticmethod
+    def dl_update(j, val):
+        if val is None:
+            j.dl = None
+            return
+        val = dict(val)
+        val["at"] = time.time()
+        j.dl = val
+
     def _run(self, j: Job, ctx):
         q = ctx.Queue()
         j.state, j.started = "running", time.time()
@@ -179,6 +196,8 @@ class JobManager:
             elif kind == "step":
                 if val != j.step:
                     j.step, j.step_started, j.sub = val, time.time(), 0.0
+            elif kind == "dl":
+                self.dl_update(j, val)
             elif kind == "sub":
                 j.sub = float(val)
             elif kind == "meta":

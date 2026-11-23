@@ -236,3 +236,9 @@ body.lyrics-only #player{cursor:none}
 .banner{display:flex;align-items:center;gap:10px;background:#ffb54718;border:1px solid #ffb54755;color:var(--txt);border-radius:12px;padding:12px 14px;margin:14px 0}
 .banner .ic{color:var(--warn)}.banner span{flex:1}
 .updbar{margin:14px 0 6px}
+
+.dl{margin-top:10px;font-size:13px;color:var(--mut);display:block}
+.dl .ic{vertical-align:-2px}
+.pbar.thin{height:4px;margin-top:6px}
+.warnTxt{color:var(--warn)}
+.spinning{animation:sp 1s linear infinite}

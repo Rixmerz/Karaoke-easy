@@ -302,6 +302,20 @@ async function pollJobs() {
   firstPoll = false;
   if ($("v-jobs").classList.contains("on")) renderJobs();
 }
+function mbs(b) { return b == null ? "" : b >= 1048576 ? (b / 1048576).toFixed(1).replace(".", ",") + " MB" : Math.round(b / 1024) + " KB"; }
+function dlLine(d) {
+  if (!d) return "";
+  if (d.phase === "start") return `${icon("loader-circle", 14, "spinning")} Conectando con el sitio y buscando el video…`;
+  if (d.phase === "merge") return `${icon("loader-circle", 14, "spinning")} Descarga completa, uniendo audio y video…`;
+  const pct = d.fraction != null ? Math.round(d.fraction * 100) + " %" : mbs(d.bytes);
+  const parts = [`Descargando ${pct}`];
+  if (d.total) parts.push(`${mbs(d.bytes)} de ${mbs(d.total)}`);
+  if (d.speed) parts.push(mbs(d.speed) + "/s");
+  if (d.eta != null) parts.push(d.eta < 60 ? `faltan ${Math.max(1, Math.round(d.eta))} s` : `faltan ~${Math.round(d.eta / 60)} min`);
+  const slow = d.speed != null && d.speed < 150 * 1024;
+  return `${icon("download", 14)} ${parts.join(" · ")}` + (slow ? ` <span class="warnTxt">· descarga lenta</span>` : "")
+    + (d.fraction != null ? `<div class="pbar thin"><i style="width:${Math.round(d.fraction * 100)}%"></i></div>` : "");
+}
 function eta(s) { if (s == null) return "calculando…"; if (s < 60) return "menos de 1 min"; return "faltan ~" + Math.round(s / 60) + " min"; }
 function renderJobs() {
   const L = $("jobsList"); $("jobsEmpty").style.display = JOBS.length ? "none" : "block";
@@ -323,7 +337,8 @@ function renderJobs() {
         ${j.state === "done" && j.result?.song_id ? `<button class="btn sm pri" data-p="${j.result.song_id}">${icon("play", 15)} Cantar</button><button class="btn sm" title="Abrir carpeta" data-f="${esc(j.result.folder)}">${icon("folder-open", 15)}</button>` : ""}</div>
       ${j.state === "cancelled" ? "" : `<div class="steps">${steps}</div>
       <div class="pbar"><i style="width:${pct}%"></i></div>
-      <div class="pinfo"><span>${pct} %</span><span>${j.state === "running" ? eta(j.eta) : j.state === "queued" ? "esperando turno" : ""}</span></div>`}
+      <div class="pinfo"><span>${pct} %</span><span>${j.state === "running" ? eta(j.eta) : j.state === "queued" ? "esperando turno" : ""}</span></div>
+      ${j.state === "running" && j.download ? `<div class="dl">${dlLine(j.download)}</div>` : ""}`}
       ${j.state === "error" ? `<div class="errmsg">No se pudo preparar esta canción. ${esc(j.error || "")}</div>` : ""}
       ${j.log?.length ? `<details data-id="${j.id}" ${open.has(j.id) ? "open" : ""}><summary class="sub" style="cursor:pointer;margin-top:10px">Detalles técnicos</summary><pre class="log">${esc(j.log.join("\n"))}</pre></details>` : ""}`;
     L.appendChild(d);
