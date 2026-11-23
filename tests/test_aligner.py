@@ -29,3 +29,14 @@ def test_trim_to_voice_cuts_long_tail():
     assert abs(e - 3.0) < 1e-6
     assert trim_to_voice(10.0, 12.0, voiced) == 10.4    # sin voz: duración mínima
     assert FRAME == 0.02
+
+
+def test_silence_bias_and_start_to_voice():
+    import numpy as np
+    from karaoke_easy import aligner as a
+    v = np.zeros(300, bool); v[50:100] = True; v[200:250] = True
+    em = np.log(np.full((300, 29), 1 / 29))
+    b = a.silence_bias(em, v)
+    assert b[150, 1] < em[150, 1] and b[150, 0] == em[150, 0] and b[60, 1] == em[60, 1]
+    assert a.start_to_voice(0.9, 1.5, v) == 1.0
+

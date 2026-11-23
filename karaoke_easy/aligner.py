@@ -114,6 +114,26 @@ def voiced_mask(audio: np.ndarray, rel_db=30.0):
     return db > db.max() - rel_db
 
 
+def silence_bias(em: np.ndarray, voiced: np.ndarray, pad=0.15, penalty=8.0):
+    """Penaliza letras en frames sin voz (dilatados `pad` s): el Viterbi deja las pausas e
+    interludios instrumentales como blank y no estira ni coloca palabras sobre ellos."""
+    n = min(len(em), len(voiced))
+    k = max(1, int(pad / FRAME))
+    v = np.convolve(voiced[:n].astype(np.float32), np.ones(2 * k + 1), "same") > 0
+    out = em.copy()
+    out[:n][~v, 1:] -= penalty
+    return out
+
+
+def start_to_voice(s, e, voiced, max_shift=0.3):
+    """Adelanta el inicio de la palabra al primer frame con voz (si cayó en silencio)."""
+    a, b = int(s / FRAME), min(len(voiced), int(e / FRAME), int((s + max_shift) / FRAME))
+    for f in range(a, b):
+        if voiced[f]:
+            return max(s, f * FRAME)
+    return s
+
+
 def trim_to_voice(s, e, voiced, max_gap=0.35):
     """Corta el final de la palabra cuando la voz se apaga (evita palabras estiradas sobre silencios)."""
     a, b = int(s / FRAME), min(len(voiced), int(e / FRAME))
@@ -138,6 +158,7 @@ def align_lines(vocals_16k: np.ndarray, line_words, windows, device="cpu", log=p
     _, vocab, _ = load_model(device)
     em_all = emissions(vocals_16k, device)
     voiced = voiced_mask(vocals_16k)
+    em_all = silence_bias(em_all, voiced)
     out, refined, prev_end = [], 0, 0.0
     for words, (w0, w1) in zip(line_words, windows):
         w0 = max(w0, prev_end - 0.05, 0.0)
@@ -160,6 +181,7 @@ def align_lines(vocals_16k: np.ndarray, line_words, windows, device="cpu", log=p
                 s = w0 + first[a] * FRAME
                 e = w0 + (last[b - 1] + 1) * FRAME
                 e = trim_to_voice(s, e, voiced)
+                s = min(start_to_voice(s, e, voiced), e - 0.05)
                 new.append(Word(w.text, s, e))
             else:  # palabra sin letras alineables (números, símbolos): se completa luego
                 new.append(Word(w.text, None, None))

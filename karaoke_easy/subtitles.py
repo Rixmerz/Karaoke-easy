@@ -124,7 +124,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             text += f"{{\\k{pre}}}"
         for j, w in enumerate(line):
             nxt = line[j + 1].start if j + 1 < len(line) else w.end
-            dur = max(1, int(round((nxt - w.start) * 100)))
+            sung = max(w.end, w.start + 0.05)
+            # pausa dentro del verso: la palabra se llena solo mientras suena y luego espera
+            fill_end = sung if nxt - sung > 0.25 else nxt
+            dur = max(1, int(round((fill_end - w.start) * 100)))
             text += f"{{\\kf{dur}}}{_esc(w.text.strip())} "
+            hold = int(round((nxt - fill_end) * 100))
+            if hold > 0:
+                text += f"{{\\k{hold}}}"
         ev.append(f"Dialogue: 0,{_ts(show)},{_ts(end)},{style},,0,0,0,,{{\\fad(200,200)}}{text.strip()}")
     return head + "\n".join(ev) + "\n"

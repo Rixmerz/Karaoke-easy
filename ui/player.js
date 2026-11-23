@@ -139,7 +139,7 @@ function renderLine(el,line,t){
   const key=line[0].s+"|"+line.length+"|"+line[0].w;
   if(el.dataset.k!==key){el.dataset.k=key;el.innerHTML="";for(const w of line){const s=document.createElement("span");s.className="w";s.textContent=w.w;el.appendChild(s)}}
   const spans=el.children;
-  for(let i=0;i<line.length;i++){const w=line[i],end=i+1<line.length?line[i+1].s:w.e;let p=(t-w.s)/Math.max(.05,end-w.s);p=Math.max(0,Math.min(1,p));spans[i].style.setProperty("--p",p)}
+  for(let i=0;i<line.length;i++){const w=line[i],nx=i+1<line.length?line[i+1].s:w.e,sung=Math.max(w.e,w.s+.05),end=nx-sung>.25?sung:nx;let p=(t-w.s)/Math.max(.05,end-w.s);p=Math.max(0,Math.min(1,p));spans[i].style.setProperty("--p",p)}
 }
 function frame(){
   requestAnimationFrame(frame);if(!song||!$("player").classList.contains("on"))return;
