@@ -128,12 +128,15 @@
     <button class="pb" id="styleBtn" title="Estilo de la letra"><i data-icon="type"></i></button>
     <button class="pb" id="screen2Btn" title="Letra en una segunda pantalla (TV o proyector)"><i data-icon="monitor"></i></button><button class="pb" id="listBtn" title="Lista de versos (L)"><i data-icon="list-music"></i> Letra</button><button class="pb" id="editBtn" title="Ajustar sincronía (E)"><i data-icon="pencil"></i> Ajustar</button><button class="pb" id="fsBtn" title="Pantalla completa (F)"><i data-icon="maximize"></i></button></div>
   <div id="edit">
-    <b><i data-icon="pencil" data-size="14"></i> Ajustar sincronía</b> — se guarda con <kbd>Ctrl</kbd>+<kbd>S</kbd><br>
-    <kbd>,</kbd>/<kbd>.</kbd> mover el verso actual −/+ 50 ms · <kbd>Shift</kbd>+<kbd>,</kbd>/<kbd>.</kbd> toda la letra<br>
-    <kbd>Enter</kbd> “aquí empieza el verso siguiente” (al ritmo)<br>
-    <div style="margin-top:6px"><button class="pb" id="saveBtn"><i data-icon="save" data-size="14"></i> Guardar</button> <button class="pb" id="undoBtn"><i data-icon="undo-2" data-size="14"></i> Deshacer</button> <span id="editInfo"></span></div>
+    <div class="ehead"><b><i data-icon="pencil" data-size="15"></i> Ajustar sincronía</b><span id="editInfo" class="einfo">sin cambios</span><button class="pb ic" id="editClose" title="Cerrar (E)"><i data-icon="x" data-size="15"></i></button></div>
+    <div class="ecur"><small>Verso actual</small><div id="eCurTxt">—</div></div>
+    <div class="erow"><span>Este verso</span><button class="pb" id="eLm" title="Antes (,)">−0,05 s</button><button class="pb" id="eLp" title="Después (.)">+0,05 s</button></div>
+    <div class="erow"><span>Toda la letra</span><button class="pb" id="eAm" title="Antes (Shift+,)">−0,05 s</button><button class="pb" id="eAp" title="Después (Shift+.)">+0,05 s</button></div>
+    <button class="pb etap" id="eTap" title="Enter">↵ Aquí empieza el verso siguiente</button>
+    <p class="ehint">Reproduce la canción y pulsa <kbd>Enter</kbd> justo cuando empiece cada verso. O usa los botones <b>−/+</b> en la lista de la derecha.</p>
+    <div class="erow"><button class="pb pri" id="saveBtn"><i data-icon="save" data-size="14"></i> Guardar</button><button class="pb" id="undoBtn"><i data-icon="undo-2" data-size="14"></i> Deshacer</button></div>
   </div>
-  <div id="side"><h3 style="margin:0 0 10px">Letra</h3><div id="lineList"></div></div>
+  <div id="side"><div class="shead"><h3>Letra</h3><button class="pb ic" id="sideClose" title="Ocultar (L)"><i data-icon="x" data-size="15"></i></button></div><div id="lineList"></div></div>
   <div id="stylePop" class="pop">
     <label>Tamaño de la letra</label><input type="range" id="lyrSize" min="70" max="150" value="100">
     <label>Tipografía</label><select class="field" id="lyrFont">
@@ -165,6 +168,7 @@
       <div class="grp" title="Tu micrófono por los parlantes, con eco (usa audífonos para evitar acoples)">
         <button class="pb" id="micBtn"><i data-icon="mic-off" data-size="15"></i> Micrófono</button>
         <label>Vol</label><input id="micVol" type="range" min="0" max="150" value="90" style="width:80px">
+        <label title="Más bajo = ignora más ruido de fondo (puntuación)">Sensib.</label><input id="micSens" type="range" min="0" max="100" value="50" style="width:70px" title="Sensibilidad del micrófono para la puntuación: bájala si detecta ruido">
         <label>Eco</label><input id="echo" type="range" min="0" max="100" value="35" style="width:80px"></div>
       <button class="pb" id="scoreBtn" title="Línea de notas y puntuación de afinación (necesita el micrófono)"><i data-icon="award" data-size="15"></i> Puntuación</button>
       <button class="pb" id="recBtn" title="Grabar tu interpretación (pista + tu voz)"><i data-icon="circle-dot" data-size="15"></i> Grabar</button>

@@ -20,6 +20,7 @@ def _static_dir():
 
 STATIC = _static_dir()
 _pitch_lock = threading.Lock()
+_render_lock = threading.Lock()
 
 
 class Songs:
@@ -42,28 +43,52 @@ class Songs:
         return None
 
 
-def render_pitch(folder: Path, st: int, run_ffmpeg):
-    """Crea inst_+N.m4a y voz_+N.m4a (transpuestos) si no existen."""
-    import soundfile as sf
-    import tempfile
-    import numpy as np
+_RB = None
 
-    out = {}
-    for stem in ("inst", "voz"):
+
+def _has_rubberband():
+    """¿El ffmpeg incluido trae el filtro rubberband (cambio de tono rápido y de calidad)?"""
+    global _RB
+    if _RB is None:
+        try:
+            import subprocess
+            from .pipeline import ffmpeg_exe, NO_WINDOW
+            p = subprocess.run([ffmpeg_exe(), "-hide_banner", "-filters"], capture_output=True,
+                               encoding="utf-8", errors="replace", creationflags=NO_WINDOW, timeout=20)
+            _RB = " rubberband " in p.stdout
+        except Exception:
+            _RB = False
+    return _RB
+
+
+def _pitch_filter(st: int) -> str:
+    ratio = 2 ** (st / 12)
+    if _has_rubberband():
+        return f"rubberband=pitch={ratio:.6f}:formant=preserved"
+    # Alternativa sin rubberband: cambiar la velocidad de muestreo y compensar el tempo
+    return f"asetrate=44100*{ratio:.6f},aresample=44100,atempo={1 / ratio:.6f}"
+
+
+def render_pitch(folder: Path, st: int, run_ffmpeg):
+    """Crea inst_+N.m4a y voz_+N.m4a (transpuestos) si no existen.
+
+    Todo lo hace ffmpeg (sin pasar por Python/numpy), las dos pistas a la vez, y escribe
+    a un archivo temporal que solo se renombra al terminar: un intento cortado ya no deja
+    un archivo roto que luego se tomaba como hecho."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def one(stem):
         target = folder / f"{stem}_{st:+d}.m4a"
-        if not target.exists():
-            with tempfile.TemporaryDirectory() as td:
-                wav = os.path.join(td, "a.wav")
-                run_ffmpeg(["-i", str(folder / f"{stem}.m4a"), "-ac", "2", "-ar", "44100", wav])
-                y, sr = sf.read(wav, dtype="float32", always_2d=True)
-                z = music.pitch_shift(y.T, sr, st).T
-                peak = float(np.abs(z).max()) or 1.0
-                if peak > 0.99:
-                    z *= 0.99 / peak
-                sf.write(wav, z, sr)
-                run_ffmpeg(["-i", wav, "-c:a", "aac", "-b:a", "192k", str(target)])
-        out[stem] = target.name
-    return out
+        if not target.exists() or target.stat().st_size < 1024:
+            tmp = folder / f"{stem}_{st:+d}.tmp.m4a"
+            run_ffmpeg(["-i", str(folder / f"{stem}.m4a"), "-vn", "-ac", "2", "-ar", "44100",
+                        "-af", _pitch_filter(st) + ",alimiter=limit=0.98",
+                        "-c:a", "aac", "-b:a", "192k", "-f", "mp4", str(tmp)])
+            os.replace(tmp, target)
+        return stem, target.name
+
+    with ThreadPoolExecutor(2) as ex:
+        return dict(ex.map(one, ("inst", "voz")))
 
 
 def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
@@ -199,7 +224,7 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
                         st = max(-12, min(12, int(q.get("st", ["0"])[0])))
                         if st == 0:
                             return self._json({"inst": "inst.m4a", "voz": "voz.m4a"})
-                        with _pitch_lock:
+                        with _render_lock:
                             return self._json(render_pitch(folder, st, run_ffmpeg))
                 if parts[0] == "media" and len(parts) == 3:
                     folder = songs.folder(parts[1])

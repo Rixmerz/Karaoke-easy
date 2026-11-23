@@ -174,9 +174,9 @@ function startParty(ids, shuffle) {
 }
 $("partyBtn").onclick = () => {
   const cur = tabSongs(TAB), favs = LIB.filter(s => isFav(s.id));
-  const opts = [["view", `Lo que estoy viendo (${cur.length})`], ["fav", `Favoritas (${favs.length})`], ["all", `Toda la biblioteca (${LIB.length})`]];
+  const opts = [["view", "Lo que estoy viendo", cur.length], ["fav", "Favoritas", favs.length], ["all", "Toda la biblioteca", LIB.length]];
   modal("Modo fiesta", `<p class="sub">Las canciones se reproducen una tras otra, con una pantalla de “Siguiente” entre cada una.</p>
-    <div class="radio">${opts.map(([v, n], i) => `<label class="switch"><input type="radio" name="pq" value="${v}" ${i === 0 ? "checked" : ""} style="width:18px;height:18px;appearance:auto"> ${n}</label>`).join("")}</div>
+    <div class="radio">${opts.map(([v, n, c], i) => `<label class="opt"><input type="radio" name="pq" value="${v}" ${i === 0 ? "checked" : ""}><span class="dot"></span><span class="n">${n}</span><span class="c">${c}</span></label>`).join("")}</div>
     <label class="switch" style="margin-top:14px"><input type="checkbox" id="pShuffle"> Orden aleatorio</label>`, [
     { label: "Cancelar" },
     { label: `${icon("party-popper", 15)} Empezar`, primary: true, onclick: () => {
