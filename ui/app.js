@@ -381,6 +381,12 @@ $("sOutPick").onclick = async () => {
 };
 $("sOutOpen").onclick = () => openPath($("sOut").value);
 $("sUpd").onclick = () => checkUpdate(true);
+$("sDiag").onclick = async () => {
+  const d = await api("diag");
+  modal("Registro de diagnóstico", `<p class="sub">${esc(d.path)}</p><pre class="log" style="max-height:50vh">${esc(d.tail.split("\n").slice(-200).join("\n") || "(vacío)")}</pre>`,
+    [{ label: "Copiar", onclick: async () => { await navigator.clipboard.writeText(d.tail); toast("Copiado", "ok", 1500); return false; } }, { label: "Cerrar", primary: true }]);
+};
+$("sDiagCopy").onclick = async () => { const d = await api("diag"); try { await navigator.clipboard.writeText(d.tail); toast("Registro copiado: pégalo en el chat", "ok"); } catch (e) { toast("No se pudo copiar", "err"); } };
 
 // ---------------- actualizaciones ----------------
 let VERSION = "0";

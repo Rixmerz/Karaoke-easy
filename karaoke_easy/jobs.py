@@ -21,6 +21,7 @@ KEYS = [k for k, _, _ in STEPS]
 def _worker(spec, q):
     """Se ejecuta en un proceso hijo."""
     try:
+        q.put(("log", "Proceso de trabajo iniciado."))
         import sys
         from . import paths
         paths.setup_offline()
@@ -37,6 +38,8 @@ def _worker(spec, q):
         out_dir = spec["output_dir"]
         if is_url(src):
             q.put(("dl", {"phase": "start"}))
+            from .downloader import deno_path
+            log(f"Descargando enlace (motor JavaScript: {'listo' if deno_path() else 'no encontrado'})…")
             src, a, t = download(src, Path(out_dir) / "descargas", want_video=spec.get("use_source_video", True),
                                  log=log, progress=lambda p: q.put(("sub", p)), status=lambda d: q.put(("dl", d)))
             q.put(("dl", None))
@@ -180,6 +183,7 @@ class JobManager:
     def _run(self, j: Job, ctx):
         q = ctx.Queue()
         j.state, j.started = "running", time.time()
+        _diag(f"[{j.id}] inicio: {j.spec.get('input')}")
         j.proc = ctx.Process(target=_worker, args=(j.spec, q), daemon=True)
         j.proc.start()
         while True:
@@ -193,8 +197,10 @@ class JobManager:
                 continue
             if kind == "log":
                 j.log.append(val)
+                _diag(f"[{j.id}] {val}")
             elif kind == "step":
                 if val != j.step:
+                    _diag(f"[{j.id}] paso: {val}")
                     j.step, j.step_started, j.sub = val, time.time(), 0.0
             elif kind == "dl":
                 self.dl_update(j, val)
@@ -211,7 +217,21 @@ class JobManager:
                     j.state, j.error = "error", val
                 break
         j.finished = time.time()
+        _diag(f"[{j.id}] fin: estado={j.state} paso={j.step} error={j.error}")
         j.proc.join(timeout=5)
+
+
+def _diag(line):
+    """Registro de diagnóstico en %LOCALAPPDATA%\\KaraokeEasy\\registro.log (máx. ~2 MB)."""
+    try:
+        from . import paths
+        f = paths.user_cache() / "registro.log"
+        if f.exists() and f.stat().st_size > 2_000_000:
+            f.replace(f.with_suffix(".log.1"))
+        with open(f, "a", encoding="utf-8") as fh:
+            fh.write(time.strftime("%Y-%m-%d %H:%M:%S ") + str(line).rstrip() + "\n")
+    except Exception:
+        pass
 
 
 def _kill_tree(pid):

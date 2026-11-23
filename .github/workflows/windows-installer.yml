@@ -123,6 +123,42 @@ jobs:
           if ($pl.ExitCode -ne 0) { throw "La app ligera no abrió bien (código $($pl.ExitCode))" }
           Remove-Item Env:KARAOKE_UI_SELFTEST
           "Instalador ligero OK"
+      - name: Flujo real de la app (motor instalado + cola de trabajos + enlace)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory web2 -Force | Out-Null; Copy-Item "cancion prueba.wav" web2\
+          $srv = Start-Process python -ArgumentList "-m","http.server","8766","--bind","127.0.0.1","--directory","web2" -PassThru
+          $eng = Start-Process C:\KE\engine\KaraokeEngine.exe -ArgumentList "--serve","--no-stdin-watch" -RedirectStandardOutput eng.out -RedirectStandardError eng.err -PassThru -NoNewWindow
+          for ($i = 0; $i -lt 120; $i++) { if ((Test-Path eng.out) -and (Select-String -Path eng.out -Pattern ENGINE_READY -Quiet)) { break }; Start-Sleep 1 }
+          $ready = (Select-String -Path eng.out -Pattern ENGINE_READY).Line.Split(" ")
+          if (-not $ready) { Get-Content eng.err; throw "El motor instalado no arrancó" }
+          $base = "http://127.0.0.1:$($ready[1])/api/"; $h = @{ "X-Token" = $ready[2] }
+          Invoke-RestMethod "${base}settings" -Method Post -Headers $h -ContentType "application/json" -Body (@{ output_dir = "$PWD\salida_cola" } | ConvertTo-Json) | Out-Null
+          function Run-Job($url, $opts, $limit) {
+            $body = @{ inputs = @($url); options = $opts } | ConvertTo-Json -Depth 5
+            $id = (Invoke-RestMethod "${base}jobs" -Method Post -Headers $h -ContentType "application/json" -Body $body)[0].id
+            $t0 = Get-Date; $last = ""
+            while ($true) {
+              Start-Sleep 2
+              $j = (Invoke-RestMethod "${base}jobs" -Headers $h) | Where-Object { $_.id -eq $id }
+              $info = "$($j.state) paso=$($j.step) $([math]::Round($j.fraction*100))%"
+              if ($j.download) { $info += " descarga=$($j.download.phase) $([math]::Round(($j.download.fraction ?? 0)*100))%" }
+              if ($info -ne $last) { "{0,5:N0}s  {1}" -f ((Get-Date) - $t0).TotalSeconds, $info; $last = $info }
+              if ($j.state -in @("done", "error", "cancelled")) { break }
+              if (((Get-Date) - $t0).TotalSeconds -gt $limit) { Invoke-RestMethod "${base}jobs/$id/cancel" -Method Post -Headers $h -ContentType "application/json" -Body "{}" | Out-Null; $j.state = "timeout"; break }
+            }
+            "---- registro del trabajo ----"; $j.log | Select-Object -Last 40
+            return $j.state
+          }
+          $st = Run-Job "http://127.0.0.1:8766/cancion%20prueba.wav" @{ lyrics = "Hello my friend`nThe sun is shining on the river`nTonight we sing together under the stars"; use_source_video = $false } 600
+          "==== YouTube real (informativo, no hace fallar el build) ===="
+          $yt = Run-Job "https://www.youtube.com/watch?v=jNQXAC9IVRw" @{ use_source_video = $false } 300
+          "Resultado YouTube: $yt"
+          "---- registro de diagnóstico ----"; Get-Content "$env:LOCALAPPDATA\KaraokeEasy\registro.log" -Tail 60 -ErrorAction SilentlyContinue
+          Stop-Process $eng.Id -Force -ErrorAction SilentlyContinue; Stop-Process $srv.Id -ErrorAction SilentlyContinue
+          Get-Process KaraokeEngine -ErrorAction SilentlyContinue | Stop-Process -Force
+          if ($st -ne "done") { throw "El flujo real de la app no terminó (estado: $st)" }
+          "Flujo real de la app OK"
       - uses: actions/upload-artifact@v4
         with:
           name: resultado-prueba

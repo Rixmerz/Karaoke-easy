@@ -21,6 +21,8 @@ def main(argv):
         port = int(argv[argv.index("--port") + 1])
     if "--no-token" in argv:  # solo desarrollo / pruebas en navegador
         token = None
+    from .jobs import _diag
+    _diag(f"motor iniciado (versión {paths.app_version()}, componentes en {paths.MODELS_DIR}, listos={paths.models_ready()})")
     jobs = JobManager()
     httpd, url = server.start(port=port, token=token, jobs=jobs)
     print(f"ENGINE_READY {httpd.server_address[1]} {token or '-'}", flush=True)

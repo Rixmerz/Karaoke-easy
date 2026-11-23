@@ -161,6 +161,10 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
                 if parts[:2] == ["api", "version"]:
                     from . import paths
                     return self._json({"version": paths.app_version(), "bundled_models": paths.BUNDLED_MODELS})
+                if parts[:2] == ["api", "diag"]:
+                    from . import paths
+                    f = paths.user_cache() / "registro.log"
+                    return self._json({"path": str(f), "tail": f.read_text(encoding="utf-8", errors="replace")[-20000:] if f.exists() else ""})
                 if parts[:2] == ["api", "models"]:
                     from . import downloads, paths
                     return self._json({"ready": paths.models_ready(), "dir": str(paths.MODELS_DIR),
