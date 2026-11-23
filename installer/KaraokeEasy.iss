@@ -1,4 +1,4 @@
-#define AppName "Karaoke Easy"
+﻿#define AppName "Karaoke Easy"
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
@@ -33,6 +33,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+Name: "showdetails"; Description: "Mostrar detalles técnicos durante la instalación (archivos que se copian)"; GroupDescription: "Opciones avanzadas:"; Flags: unchecked
 
 [Files]
 Source: "..\src-tauri\target\release\KaraokeEasy.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -60,4 +61,20 @@ Filename: "{app}\KaraokeEasy.exe"; Flags: nowait; Check: ShouldRelaunch
 function ShouldRelaunch: Boolean;
 begin
   Result := WizardSilent and (Pos('/RELAUNCH', UpperCase(GetCmdTail)) > 0);
+end;
+
+// Sin "detalles técnicos" (por defecto): solo la barra y un mensaje sencillo, sin la lista de archivos.
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID = wpInstalling) and not WizardIsTaskSelected('showdetails') then
+  begin
+    WizardForm.FilenameLabel.Visible := False;
+    WizardForm.StatusLabel.Caption := 'Instalando Karaoke Easy… esto puede tardar unos minutos.';
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if (CurStep = ssInstall) and not WizardIsTaskSelected('showdetails') then
+    WizardForm.FilenameLabel.Visible := False;
 end;
