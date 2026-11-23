@@ -61,3 +61,26 @@
 - En las 5 entrevistas, preguntar 4 precios: caro, barato, demasiado caro, demasiado barato.
 - Si la mayoría ve USD 79 como "caro", bajar a USD 59.
 - Precio regional para Latinoamérica (~40 % menos): se decide tras las entrevistas.
+
+## 2026-11-23 · Actualizaciones, telemetría y API propia
+**Problema detectado:** las actualizaciones y la descarga de modelos salen hoy de las Releases de GitHub de este repo (`app.py`, `downloads.py`, `server.py`). Si el repo pasa a privado, **dejan de funcionar** para los clientes.
+
+**Decisión:**
+1. **Actualizaciones:**
+   - Se crea un repo **público solo de descargas** (`Rixmerz/karaoke-easy-releases`) que contiene únicamente instaladores y modelos, sin código.
+   - El CI publica allí y la app consulta ese repo. Costo 0, y la actualización automática actual se mantiene.
+   - Más adelante, el canal se puede mover a la API propia para separar beta y estable, o publicar por etapas.
+2. **Telemetría:**
+   - Mínima y **con permiso**: una casilla en el primer arranque, desactivada si el usuario no acepta.
+   - Eventos anónimos: app abierta, canción creada (duración y tiempo de proceso), sesión de práctica (minutos, uso de tono, bucle y puntuación), errores del motor.
+   - Nunca se envían títulos, archivos, letras ni audio.
+   - Sirve para medir la métrica principal: profesores activos con 2 o más clases por semana.
+3. **API propia (más adelante):** un Cloudflare Worker con base de datos D1 (nivel gratuito) con:
+   - `/v1/events` para la telemetría;
+   - `/v1/update` con el manifiesto de versiones y canales;
+   - `/v1/errors` para reportes de fallos.
+   - Las licencias las sigue gestionando Lemon Squeezy.
+
+**Orden:**
+- (a) Repo de descargas antes de privatizar.
+- (b) Telemetría y API cuando haya los primeros usuarios en prueba: sin usuarios no hay nada que medir.
