@@ -188,6 +188,14 @@ class KaraokeBuilder:
             wins.append((ln[0].start - 1.5, max(ln[-1].end, nxt) + 1.0))
         audio, _ = librosa.load(str(vocals), sr=aligner.SR, mono=True)
         try:
+            try:
+                out = aligner.align_global(audio, lines, wins, device=self.device, log=self.log)
+                if aligner.align_global.last_score > -1.5:
+                    self.aligned_lines = len(lines)
+                    return out
+                self.log("Confianza baja en la alineación global; se alinea verso a verso.")
+            except Exception as e:
+                self.log(f"Alineación global no disponible ({e}); se alinea verso a verso.")
             out = aligner.align_lines(audio, lines, wins, device=self.device, log=self.log)
             self.aligned_lines = getattr(aligner.align_lines, "last_refined", 0)
             return out

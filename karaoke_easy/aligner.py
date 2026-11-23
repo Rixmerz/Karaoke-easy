@@ -65,8 +65,9 @@ def emissions(audio: np.ndarray, device="cpu", chunk=20.0, ctx=1.0):
     return np.concatenate(out) if out else np.zeros((0, 29), np.float32)
 
 
-def ctc_align(em: np.ndarray, tokens):
-    """Viterbi CTC. em: (T, C) log-probs; tokens: ids (sin blank=0). Devuelve (frame por token, score medio)."""
+def ctc_align(em: np.ndarray, tokens, lo=None, hi=None, penalty=0.5):
+    """Viterbi CTC. em: (T, C) log-probs; tokens: ids (sin blank=0). Devuelve (frame por token, score medio).
+    lo/hi (opcional): frame mínimo/máximo esperado por token; fuera de ese rango se penaliza (guía suave)."""
     T, L = len(em), len(tokens)
     S = 2 * L + 1
     if L == 0 or T < L:
@@ -78,6 +79,10 @@ def ctc_align(em: np.ndarray, tokens):
         allow_skip[s] = ext[s] != ext[s - 2]
     NEG = -1e30
     dp = np.full(S, NEG)
+    guide = lo is not None
+    if guide:
+        slo = np.full(S, -1); shi = np.full(S, T + 1)
+        slo[1::2], shi[1::2] = lo, hi
     dp[0], dp[1] = em[0, 0], em[0, ext[1]]
     bp = np.zeros((T, S), dtype=np.int8)
     for t in range(1, T):
@@ -87,13 +92,16 @@ def ctc_align(em: np.ndarray, tokens):
         stack = np.stack([stay, prev1, prev2])
         arg = stack.argmax(0)
         dp = stack[arg, np.arange(S)] + em[t, ext]
+        if guide:
+            # sólo al entrar en una letra fuera de su ventana (no por cada frame que dura)
+            dp -= penalty * (((t < slo) | (t > shi)) & (arg != 0))
         bp[t] = arg
     s = S - 1 if dp[S - 1] >= dp[S - 2] else S - 2
     best = dp[s]
     path = np.empty(T, dtype=np.int64)
     for t in range(T - 1, -1, -1):
         path[t] = s
-        s -= bp[t, s]
+        s -= int(bp[t, s])
     # primer y último frame de cada token
     first, last = np.full(L, -1), np.full(L, -1)
     for t, st in enumerate(path):
@@ -150,6 +158,76 @@ def trim_to_voice(s, e, voiced, max_gap=0.35):
     if last_v is None:
         return min(e, s + 0.4)
     return max(s + 0.08, (last_v + 1) * FRAME)
+
+
+def align_global(vocals_16k: np.ndarray, line_words, windows, device="cpu", log=print, margin=3.0):
+    """Alinea toda la letra de una vez sobre la pista de voz (más robusto que verso a verso: un verso no
+    puede invadir el interludio ni el verso vecino). Las ventanas aproximadas guían de forma suave."""
+    _, vocab, _ = load_model(device)
+    em = emissions(vocals_16k, device)
+    voiced = voiced_mask(vocals_16k)
+    em = silence_bias(em, voiced)
+    T = len(em)
+    toks, spans, lo, hi = [], [], [], []
+    for words, (w0, w1) in zip(line_words, windows):
+        a, b = max(0, int((w0 - margin) / FRAME)), min(T, int((w1 + margin) / FRAME))
+        for w in words:
+            r = [vocab[c] for c in romanize(w.text) if c in vocab]
+            spans.append((len(toks), len(toks) + len(r)))
+            toks += r
+            lo += [a] * len(r); hi += [b] * len(r)
+    res, score = ctc_align(em, toks, np.array(lo), np.array(hi))
+    if res is None:
+        raise ValueError("sin tokens alineables")
+    first, last = res
+    out, flat = [], [w for ln in line_words for w in ln]
+    for w, (a, b) in zip(flat, spans):
+        if b > a:
+            st = first[a] * FRAME
+            e = trim_to_voice(st, (last[b - 1] + 1) * FRAME, voiced)
+            st = min(start_to_voice(st, e, voiced), e - 0.05)
+            out.append(Word(w.text, st, e))
+        else:
+            p = out[-1].end if out else w.start
+            out.append(Word(w.text, p, p))
+    out = _repair_split_lines(out, line_words, em, voiced, vocab)
+    align_global.last_score = score
+    log(f"Alineación global de la letra: {len(line_words)} versos (confianza {score:.2f}).")
+    return out
+
+
+def _repair_split_lines(out, line_words, em, voiced, vocab, max_gap=2.5):
+    """Un verso no puede partirse en una pausa larga (pasa con voces muy suaves en intros/outros):
+    se realinea solo, pegado al trozo más tardío y dentro del hueco que le dejan sus vecinos."""
+    k = 0
+    for li, ln in enumerate(line_words):
+        idx = list(range(k, k + len(ln)))
+        k += len(ln)
+        ws = [out[i] for i in idx]
+        gaps = [(b.start - a.end, j) for j, (a, b) in enumerate(zip(ws, ws[1:]), 1)]
+        if not gaps or max(gaps)[0] <= max_gap:
+            continue
+        cut = max(gaps)[1]
+        lo_t = max(ws[cut].start - 0.6 * cut - 1.0, out[idx[0] - 1].end if idx[0] else 0.0)
+        hi_t = out[k].start if k < len(out) else ws[-1].end + 1.0
+        f0, f1 = int(lo_t / FRAME), min(len(em), int(hi_t / FRAME))
+        toks, spans = [], []
+        for w in ws:
+            r = [vocab[c] for c in romanize(w.text) if c in vocab]
+            spans.append((len(toks), len(toks) + len(r)))
+            toks += r
+        if f1 - f0 <= len(toks):
+            continue
+        res, _ = ctc_align(em[f0:f1], toks)
+        if res is None:
+            continue
+        first, last = res
+        for i, w, (a, b) in zip(idx, ws, spans):
+            if b > a:
+                st = lo_t + first[a] * FRAME
+                e = trim_to_voice(st, lo_t + (last[b - 1] + 1) * FRAME, voiced)
+                out[i] = Word(w.text, st, max(e, st + 0.05))
+    return out
 
 
 def align_lines(vocals_16k: np.ndarray, line_words, windows, device="cpu", log=print, min_score=-4.5):

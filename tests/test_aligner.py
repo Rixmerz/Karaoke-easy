@@ -40,3 +40,16 @@ def test_silence_bias_and_start_to_voice():
     assert b[150, 1] < em[150, 1] and b[150, 0] == em[150, 0] and b[60, 1] == em[60, 1]
     assert a.start_to_voice(0.9, 1.5, v) == 1.0
 
+
+
+def test_ctc_long_line_no_overflow():
+    import numpy as np
+    from karaoke_easy import aligner as a
+    toks = [(i % 27) + 1 for i in range(200)]  # >63 letras: antes desbordaba int8
+    T = 600
+    em = np.full((T, 29), -10.0)
+    em[:, 0] = -0.1
+    for i, k in enumerate(toks):
+        em[i * 3 + 1, k] = -0.01
+    res, score = a.ctc_align(em, toks)
+    assert res is not None and res[0][0] <= res[0][-1]
