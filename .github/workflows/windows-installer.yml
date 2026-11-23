@@ -143,14 +143,15 @@ jobs:
               $j = (Invoke-RestMethod "${base}jobs" -Headers $h) | Where-Object { $_.id -eq $id }
               $info = "$($j.state) paso=$($j.step) $([math]::Round($j.fraction*100))%"
               if ($j.download) { $info += " descarga=$($j.download.phase) $([math]::Round(($j.download.fraction ?? 0)*100))%" }
-              if ($info -ne $last) { "{0,5:N0}s  {1}" -f ((Get-Date) - $t0).TotalSeconds, $info; $last = $info }
+              if ($info -ne $last) { Write-Host ("{0,5:N0}s  {1}" -f ((Get-Date) - $t0).TotalSeconds, $info); $last = $info }
               if ($j.state -in @("done", "error", "cancelled")) { break }
               if (((Get-Date) - $t0).TotalSeconds -gt $limit) { Invoke-RestMethod "${base}jobs/$id/cancel" -Method Post -Headers $h -ContentType "application/json" -Body "{}" | Out-Null; $j.state = "timeout"; break }
             }
-            "---- registro del trabajo ----"; $j.log | Select-Object -Last 40
-            return $j.state
+            Write-Host "---- registro del trabajo ----"; $j.log | Select-Object -Last 40 | ForEach-Object { Write-Host $_ }
+            return [string]$j.state   # solo el estado (lo demás va por Write-Host)
           }
-          $st = Run-Job "http://127.0.0.1:8766/cancion%20prueba.wav" @{ lyrics = "Hello my friend`nThe sun is shining on the river`nTonight we sing together under the stars"; use_source_video = $false } 600
+          $st = [string](Run-Job "http://127.0.0.1:8766/cancion%20prueba.wav" @{ lyrics = "Hello my friend`nThe sun is shining on the river`nTonight we sing together under the stars"; use_source_video = $false } 600 | Select-Object -Last 1)
+          "Resultado del trabajo con enlace local: $st"
           "==== YouTube real (informativo, no hace fallar el build) ===="
           $yt = Run-Job "https://www.youtube.com/watch?v=jNQXAC9IVRw" @{ use_source_video = $false } 300
           "Resultado YouTube: $yt"
