@@ -4,7 +4,7 @@ Resumen:
   * Sin licencia: 14 días de prueba con todo. Después, la app abre y reproduce lo ya
     procesado, pero no deja crear canciones nuevas.
   * Activación: una sola vez en línea (Lemon Squeezy, máximo de equipos configurado allá).
-    Luego funciona sin conexión. Se revalida en segundo plano como mucho cada 7 días;
+    Luego funciona sin conexión. Se revalida en segundo plano como mucho una vez al día;
     si no hay conexión se sigue funcionando, y tras 30 días sin ninguna validación
     exitosa se pide reconectar.
   * Plan según el nombre de la variante: "Profesor" o "Eventos".
@@ -36,7 +36,7 @@ BUY_URL = "https://karaoke-easy.lemonsqueezy.com/"  # TODO: enlace real de compr
 LS_API = "https://api.lemonsqueezy.com/v1/licenses/"
 
 TRIAL_DAYS = 14
-REVALIDATE_EVERY = 7 * 86400
+REVALIDATE_EVERY = 1 * 86400  # una vez al día: un bloqueo remoto llega en menos de 24 h si hay internet
 OFFLINE_GRACE = 30 * 86400
 HTTP_TIMEOUT = 15
 
