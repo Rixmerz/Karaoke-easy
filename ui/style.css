@@ -264,3 +264,6 @@ body.lyrics-only #player{cursor:none}
 .opt:has(input:checked){border-color:var(--acc);background:#ff4d6d1a}.opt:has(input:checked) .dot{border-color:var(--acc)}
 .opt:has(input:checked) .dot::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--acc)}
 .opt .n{flex:1}.opt .c{color:var(--dim);font-size:12px;background:#ffffff12;border-radius:20px;padding:2px 9px}
+.licbadge{margin:6px 4px 0;padding:5px 10px;border-radius:20px;border:1px solid var(--line);background:transparent;color:var(--mut);font-size:12px;cursor:pointer;align-self:flex-start}
+.licbadge:hover{color:var(--acc);border-color:var(--acc)}
+@media (max-width:820px){.licbadge{display:none}}

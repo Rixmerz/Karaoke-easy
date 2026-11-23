@@ -238,6 +238,7 @@ if(chan)chan.onmessage=e=>{const m=e.data;
     $("t1").textContent=song.title||"";$("t2").textContent=(song.artist||"")+(song.key_name?"  ·  Tono "+song.key_name:"");$("player").classList.add("on")}
   if(m.type==="tick"){remote={t:m.t,playing:m.playing,rate:m.rate,at:performance.now()}}};
 $("screen2Btn").onclick=async()=>{
+  if(typeof licAllows==="function"&&!licAllows("party"))return licenseBlocked("La segunda pantalla es parte del plan Eventos.");
   try{
     if(T?.webviewWindow){const W=T.webviewWindow.WebviewWindow;const ex=await W.getByLabel("lyrics");if(ex){await ex.setFocus();return}
       new W("lyrics",{url:"index.html?view=lyrics",title:"Karaoke Easy — Letra",width:1280,height:720,backgroundColor:"#07070c"})}

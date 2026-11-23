@@ -91,7 +91,11 @@ def render_pitch(folder: Path, st: int, run_ffmpeg):
         return dict(ex.map(one, ("inst", "voz")))
 
 
-def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
+def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None, lic=None):
+    def L():
+        from . import license
+        return lic or license.manager()
+
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a):
             pass
@@ -178,6 +182,8 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
             try:
                 if parts[:2] == ["api", "jobs"] and jobs is not None:
                     return self._json(jobs.list())
+                if parts[:2] == ["api", "license"]:
+                    return self._json(L().status())
                 if parts[:2] == ["api", "settings"]:
                     from . import settings
                     return self._json(settings.load())
@@ -258,10 +264,15 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
             parts = [p for p in u.path.split("/") if p]
             if parts == ["api", "jobs"] and jobs is not None:
                 body = self._body()
-                from . import settings
+                from . import license, settings
+                inputs = body.get("inputs", [])
+                active = sum(1 for j in jobs.jobs if j.state in ("queued", "running"))
+                err = license.check_new_jobs(L().status()["state"], active, len(inputs))
+                if err:
+                    return self._json({"error": err, "license": True}, 403)
                 st = settings.load()
                 out = []
-                for item in body.get("inputs", []):
+                for item in inputs:
                     spec = {"input": item, "output_dir": st["output_dir"], "language": st["language"],
                             "quality": st["quality"], "guide_track": st["guide_track"],
                             "use_source_video": st["use_source_video"], "export_mp4": st.get("export_mp4", False),
@@ -276,6 +287,18 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
             if parts == ["api", "jobs", "clear"] and jobs is not None:
                 jobs.clear_finished()
                 return self._json({"ok": True})
+            if parts[:2] == ["api", "license"] and len(parts) == 3:
+                from . import license
+                try:
+                    if parts[2] == "activate":
+                        return self._json(L().activate(self._body().get("key", "")))
+                    if parts[2] == "deactivate":
+                        return self._json(L().deactivate())
+                    if parts[2] == "check":
+                        L().revalidate(force=True)
+                        return self._json(L().status())
+                except license.LicenseError as e:
+                    return self._json({"error": str(e)}, 400)
             if parts == ["api", "settings"]:
                 from . import settings
                 return self._json(settings.save(self._body()))
@@ -350,9 +373,9 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
     return H
 
 
-def start(extra_dirs=(), run_ffmpeg=None, port=0, token=None, jobs=None):
+def start(extra_dirs=(), run_ffmpeg=None, port=0, token=None, jobs=None, lic=None):
     if run_ffmpeg is None:
         from .pipeline import run_ffmpeg
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(Songs(extra_dirs), run_ffmpeg, token, jobs))
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(Songs(extra_dirs), run_ffmpeg, token, jobs, lic))
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     return httpd, f"http://127.0.0.1:{httpd.server_address[1]}/"

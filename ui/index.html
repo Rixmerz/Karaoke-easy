@@ -17,6 +17,7 @@
       <button data-view="settings"><span class="ico"><i data-icon="settings"></i></span><span class="lbl">Ajustes</span></button>
     </nav>
     <div class="update" id="updateBox"></div>
+    <button class="licbadge" id="licBadge" hidden title="Licencia"></button>
     <div class="foot">Versión <span id="ver">—</span></div>
   </aside>
 
@@ -89,6 +90,12 @@
     <section class="view" id="v-settings">
       <div class="head"><div class="grow"><h1>Ajustes</h1></div></div>
       <div class="settings">
+        <div class="set"><div class="t">Licencia<span id="sLicState">Comprobando…</span></div>
+          <input class="field" id="sLicKey" placeholder="Clave de licencia" style="width:280px" autocomplete="off" spellcheck="false">
+          <button class="btn sm pri" id="sLicAct">Activar</button>
+          <button class="btn sm" id="sLicCheck" hidden>Verificar</button>
+          <button class="btn sm" id="sLicDeact" hidden>Desactivar este equipo</button>
+          <button class="btn sm ghost" id="sLicBuy">Comprar</button></div>
         <div class="set"><div class="t">Carpeta de salida<span id="sOutTxt">Donde se guardan los videos y pistas</span></div>
           <input class="field" id="sOut" style="width:340px"><button class="btn sm" id="sOutPick">Elegir…</button><button class="btn sm" id="sOutOpen">Abrir</button></div>
         <div class="set"><div class="t">Idioma por defecto de la letra<span>Automático detecta el idioma de cada canción</span></div>

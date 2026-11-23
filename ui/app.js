@@ -13,7 +13,10 @@ async function api(path, body) {
   const opt = { headers: { "X-Token": API.token } };
   if (body !== undefined) { opt.method = "POST"; opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
   const r = await fetch(API.base + "api/" + path, opt);
-  if (!r.ok) throw new Error((await r.text()).slice(0, 200) || r.status);
+  if (!r.ok) {
+    const txt = await r.text(); let j = null; try { j = JSON.parse(txt); } catch (e) { }
+    const err = new Error((j && j.error) || txt.slice(0, 200) || r.status); err.license = !!(j && j.license); throw err;
+  }
   return r.json();
 }
 const media = (id, name) => `${API.base}media/${id}/${name}?t=${encodeURIComponent(API.token)}`;
@@ -47,7 +50,7 @@ function go(view) {
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + view));
   document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("on", b.dataset.view === view));
   if (view === "library") loadLibrary();
-  if (view === "settings") { loadSettings(); refreshModels(); }
+  if (view === "settings") { loadSettings(); refreshModels(); refreshLicense(); }
 }
 document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => go(b.dataset.view));
 document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => go(b.dataset.go));
@@ -166,6 +169,7 @@ function closeMenu() { $("menu")?.remove(); }
 // ---------------- modo fiesta ----------------
 let PARTY = null;   // {ids:[...], i}
 function startParty(ids, shuffle) {
+  if (!licAllows("party")) return licenseBlocked("El modo fiesta es parte del plan Eventos.");
   ids = ids.filter(id => LIB.some(s => s.id === id));
   if (!ids.length) return toast("No hay canciones para el modo fiesta", "err");
   if (shuffle) for (let i = ids.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [ids[i], ids[j]] = [ids[j], ids[i]]; }
@@ -173,6 +177,7 @@ function startParty(ids, shuffle) {
   toast(`Modo fiesta: ${ids.length} canciones`, "ok", 2500);
 }
 $("partyBtn").onclick = () => {
+  if (!licAllows("party")) return licenseBlocked("El modo fiesta es parte del plan Eventos.");
   const cur = tabSongs(TAB), favs = LIB.filter(s => isFav(s.id));
   const opts = [["view", "Lo que estoy viendo", cur.length], ["fav", "Favoritas", favs.length], ["all", "Toda la biblioteca", LIB.length]];
   modal("Modo fiesta", `<p class="sub">Las canciones se reproducen una tras otra, con una pantalla de “Siguiente” entre cada una.</p>
@@ -275,6 +280,9 @@ $("lySearch").onclick = async () => {
 };
 $("create").onclick = async () => {
   if (!QUEUE.length) return;
+  if (LIC && !LIC.features.create) { licenseBlocked(); return; }
+  if (LIC && LIC.max_queued && JOBS.filter(j => j.state === "running" || j.state === "queued").length + QUEUE.length > LIC.max_queued)
+    return licenseBlocked(`Con el plan ${LIC.label} puedes tener hasta ${LIC.max_queued} canciones en proceso a la vez. Espera a que terminen o pásate al plan Eventos para procesar muchas de una vez.`);
   if (!MODELS_READY) { toast("Primero descarga los componentes en Ajustes", "err"); go("settings"); return; }
   const single = QUEUE.length === 1;
   const options = { semitones, language: $("optLang").value || null, use_source_video: $("optVideoBg").checked, guide_track: $("optGuide").checked, export_mp4: $("optMp4").checked };
@@ -284,7 +292,7 @@ $("create").onclick = async () => {
     toast(single ? "¡Listo! Tu canción se está preparando." : `${QUEUE.length} canciones en preparación.`, "ok");
     QUEUE = []; renderQueue(); $("lyText").value = ""; $("lyRes").innerHTML = ""; $("lyArtist").value = $("lyTitle").value = "";
     go("jobs"); pollJobs();
-  } catch (e) { toast("No se pudo iniciar: " + e.message, "err"); }
+  } catch (e) { if (e.license) { licenseBlocked(e.message); refreshLicense(); } else toast("No se pudo iniciar: " + e.message, "err"); }
 };
 
 // ---------------- en proceso ----------------
@@ -498,6 +506,54 @@ async function e2eSelftest(url) {
   return okPlayer;
 }
 
+// ---------------- licencia ----------------
+let LIC = null;
+const licAllows = f => !LIC || !!LIC.features[f];
+function openBuy() { if (LIC?.buy_url) openUrl(LIC.buy_url); }
+async function openUrl(u) { try { if (T?.opener) await T.opener.openUrl(u); else window.open(u, "_blank"); } catch (e) { window.open(u, "_blank"); } }
+function licenseBlocked(msg) {
+  msg = msg || (LIC?.state === "reconnect" ? "Conéctate a internet para verificar tu licencia y seguir creando canciones."
+    : "Tu prueba gratuita terminó. Puedes seguir cantando las canciones que ya tienes; para crear nuevas, activa una licencia.");
+  modal("Licencia", `<p>${esc(msg)}</p>`, [{ label: "Cerrar" }, { label: "Comprar", onclick: () => { openBuy(); } },
+    { label: "Tengo una clave", primary: true, onclick: () => { go("settings"); setTimeout(() => $("sLicKey")?.focus(), 100); } }]);
+}
+async function refreshLicense() {
+  try { LIC = await api("license"); } catch (e) { return; }
+  const b = $("licBadge");
+  if (LIC.state === "trial") { b.hidden = false; b.textContent = `Prueba: ${LIC.days_left} ${LIC.days_left === 1 ? "día" : "días"}`; }
+  else if (LIC.state === "unlicensed" || LIC.state === "reconnect") { b.hidden = false; b.textContent = LIC.state === "reconnect" ? "Verificar licencia" : "Sin licencia"; }
+  else b.hidden = true;
+  const st = LIC.state === "trial" ? `Prueba gratuita: ${LIC.days_left} ${LIC.days_left === 1 ? "día restante" : "días restantes"} (todas las funciones)`
+    : LIC.state === "unlicensed" ? "Sin licencia: puedes cantar tus canciones, pero no crear nuevas"
+    : LIC.state === "reconnect" ? "Hace más de 30 días que no se verifica tu licencia. Conéctate a internet y pulsa Verificar."
+    : `Plan ${LIC.label} · clave ${LIC.key_hint}`;
+  $("sLicState").textContent = st;
+  const has = !!LIC.tier;
+  $("sLicKey").hidden = $("sLicAct").hidden = has;
+  $("sLicDeact").hidden = $("sLicCheck").hidden = !has;
+  $("sLicBuy").hidden = LIC.state === "eventos";
+  $("sLicBuy").textContent = LIC.state === "profesor" ? "Pasar a Eventos" : "Comprar";
+}
+$("licBadge").onclick = () => { go("settings"); };
+$("sLicBuy").onclick = openBuy;
+$("sLicAct").onclick = async () => {
+  const k = $("sLicKey").value.trim(); if (!k) return toast("Escribe tu clave de licencia", "err");
+  $("sLicAct").disabled = true;
+  try { LIC = await api("license/activate", { key: k }); $("sLicKey").value = ""; toast(`¡Licencia ${LIC.label} activada en este equipo!`, "ok"); }
+  catch (e) { toast(e.message, "err", 6000); }
+  $("sLicAct").disabled = false; refreshLicense();
+};
+$("sLicKey").onkeydown = e => { if (e.key === "Enter") $("sLicAct").click(); };
+$("sLicDeact").onclick = () => modal("Desactivar este equipo", `<p class="sub">Libera este PC para usar la clave en otro. Aquí volverás a no tener licencia.</p>`, [
+  { label: "Cancelar" },
+  { label: "Desactivar", primary: true, onclick: async () => {
+      try { await api("license/deactivate", {}); toast("Equipo desactivado", "ok"); } catch (e) { toast(e.message, "err", 6000); }
+      refreshLicense(); } }]);
+$("sLicCheck").onclick = async () => {
+  try { await api("license/check", {}); } catch (e) { }
+  await refreshLicense(); toast(LIC.tier ? "Licencia verificada" : "La licencia ya no es válida", LIC.tier ? "ok" : "err");
+};
+
 // ---------------- arranque ----------------
 function splash(txt) { if (txt) $("splashTxt").textContent = txt; }
 async function boot() {
@@ -512,6 +568,7 @@ async function boot() {
   }
   try { const vi = await api("version"); VERSION = vi.version; BUNDLED = vi.bundled_models; } catch (e) { }
   await refreshModels();
+  await refreshLicense();
   $("ver").textContent = VERSION; $("sAbout").textContent = "Karaoke Easy " + VERSION;
   await loadSettings().catch(() => { });
   splash("Cargando tu biblioteca…");
