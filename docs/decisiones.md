@@ -37,3 +37,27 @@
 **Opciones descartadas:** subir pistas procesadas a YouTube; vender una biblioteca de canciones; regalarla junto con el programa.
 **Por qué:** la pista sin voz sale de la grabación original. Repartirla, cobrando o gratis, es distribuir copias de obras protegidas, y quien las distribuye es el responsable.
 **Sí se permite:** canciones de dominio público, con licencia libre, propias o autorizadas por escrito.
+
+## 2026-11-23 · Precios iniciales (hipótesis a validar en entrevistas)
+**Referencias** (precios públicos, nov-2026, varían por región):
+- Moises Pro: ~USD 96/año.
+- LALAL.AI Pro: ~USD 180/año.
+- Sight Singing Studio: USD 99.99/año.
+- KaraFun Pro (uso comercial, incluye catálogo): USD 49/mes (~USD 588/año).
+
+**Decisión:**
+| Licencia | Precio | Incluye |
+|---|---|---|
+| Prueba | Gratis, 14 días | Todo |
+| Profesor | **USD 79/año** (fundadores: USD 49 el primer año, primeros 20) | Todo menos lote masivo y modo eventos; 2 PCs |
+| Eventos | **USD 249/año** | Lote ilimitado, GPU, modo fiesta, segunda pantalla; 2 PCs |
+
+**Por qué:**
+- Profesor va por debajo de LALAL.AI y en línea con Moises o Sight Singing, pero hace más para una clase: letra sincronizada, tono, bucle y puntuación.
+- Eventos cuesta menos de la mitad que KaraFun Pro porque no incluye canciones.
+- El costo por cliente es casi 0, porque todo se procesa en el PC del cliente.
+
+**Validación:**
+- En las 5 entrevistas, preguntar 4 precios: caro, barato, demasiado caro, demasiado barato.
+- Si la mayoría ve USD 79 como "caro", bajar a USD 59.
+- Precio regional para Latinoamérica (~40 % menos): se decide tras las entrevistas.
