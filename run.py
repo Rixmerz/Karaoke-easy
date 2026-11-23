@@ -46,6 +46,13 @@ if __name__ == "__main__":
     import multiprocessing as _mp
 
     _mp.freeze_support()  # necesario para los procesos de trabajo en el .exe
+    if "--worker" in sys.argv:
+        from karaoke_easy.jobs import worker_main
+
+        worker_main(sys.argv[sys.argv.index("--worker") + 1])
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0)  # salir aunque alguna librería deje hilos abiertos
     if "--serve" in sys.argv:
         from karaoke_easy.engine import main as engine_main
 

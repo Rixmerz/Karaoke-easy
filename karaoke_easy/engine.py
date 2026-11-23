@@ -33,7 +33,11 @@ def main(argv):
                 pass
         except Exception:
             pass
-        os._exit(0)  # la app se cerró: terminar el motor y sus trabajos
+        from .jobs import _kill_tree
+        for j in jobs.jobs:  # la app se cerró: terminar también los trabajos en curso
+            if j.state == "running" and j.proc is not None:
+                _kill_tree(j.proc.pid)
+        os._exit(0)
 
     if "--no-stdin-watch" not in argv and sys.stdin is not None:
         threading.Thread(target=watch_parent, daemon=True).start()

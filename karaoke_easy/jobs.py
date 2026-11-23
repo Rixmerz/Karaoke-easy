@@ -1,6 +1,5 @@
 """Cola de trabajos del motor: cada canción se procesa en un proceso aparte
 (cancelar = terminarlo al instante; un fallo no tumba la aplicación)."""
-import multiprocessing as mp
 import threading
 import time
 import traceback
@@ -169,14 +168,17 @@ class JobManager:
         return [j.public() for j in self.jobs]
 
     def _loop(self):
-        ctx = mp.get_context("spawn")
         while True:
             nxt = next((j for j in self.jobs if j.state == "queued"), None)
             if nxt is None:
                 self.wake.wait(1.0)
                 self.wake.clear()
                 continue
-            self._run(nxt, ctx)
+            try:
+                self._run(nxt)
+            except Exception as e:  # nunca detener la cola
+                nxt.state, nxt.error = "error", f"No se pudo iniciar el proceso: {e}"
+                _diag(f"[{nxt.id}] no se pudo iniciar: {traceback.format_exc()}")
 
     @staticmethod
     def dl_update(j, val):
@@ -187,45 +189,106 @@ class JobManager:
         val["at"] = time.time()
         j.dl = val
 
-    def _run(self, j: Job, ctx):
-        q = ctx.Queue()
+    def _handle(self, j, kind, val):
+        if kind == "log":
+            j.log.append(val)
+            _diag(f"[{j.id}] {val}")
+        elif kind == "step":
+            if val != j.step:
+                _diag(f"[{j.id}] paso: {val}")
+                j.step, j.step_started, j.sub = val, time.time(), 0.0
+        elif kind == "dl":
+            self.dl_update(j, val)
+        elif kind == "sub":
+            j.sub = float(val)
+        elif kind == "meta":
+            j.title = val.get("title") or j.title
+            j.artist = val.get("artist") or j.artist
+        elif kind == "done":
+            j.state, j.result, j.step = "done", val, "finish"
+        elif kind == "error":
+            if j.state != "cancelled":
+                j.state, j.error = "error", val
+
+    def _run(self, j: Job):
+        """Procesa la canción en un proceso aparte: el propio motor con --worker
+        (sin multiprocessing: funciona igual con o sin consola, que es como lo lanza la app)."""
+        import json
+        import subprocess
+        import sys
+        from . import paths
+
+        jobs_dir = paths.user_cache() / "trabajos"
+        jobs_dir.mkdir(parents=True, exist_ok=True)
+        spec_file = jobs_dir / f"{j.id}.json"
+        spec_file.write_text(json.dumps(j.spec, ensure_ascii=False), encoding="utf-8")
+        err_file = jobs_dir / f"{j.id}.err.txt"
+        if getattr(sys, "frozen", False):
+            cmd = [sys.executable, "--worker", str(spec_file)]
+        else:
+            cmd = [sys.executable, str(Path(__file__).resolve().parent.parent / "run.py"), "--worker", str(spec_file)]
         j.state, j.started = "running", time.time()
         _diag(f"[{j.id}] inicio: {j.spec.get('input')}")
-        j.proc = ctx.Process(target=_worker, args=(j.spec, q), daemon=True)
-        j.proc.start()
-        while True:
-            try:
-                kind, val = q.get(timeout=0.5)
-            except Exception:
-                if not j.proc.is_alive():
-                    if j.state == "running":
-                        j.state, j.error = "error", j.error or "El proceso terminó inesperadamente."
+        flags = 0x08000000 if sys.platform == "win32" else 0  # CREATE_NO_WINDOW
+        with open(err_file, "w", encoding="utf-8", errors="replace") as err:
+            j.proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=err,
+                                      creationflags=flags, bufsize=1, text=True, encoding="utf-8", errors="replace")
+            for line in j.proc.stdout:
+                if not line.startswith(MARK):
+                    continue  # salida de librerías: se ignora
+                try:
+                    kind, val = json.loads(line[len(MARK):])
+                except Exception:
+                    continue
+                self._handle(j, kind, val)
+                if kind in ("done", "error"):
                     break
-                continue
-            if kind == "log":
-                j.log.append(val)
-                _diag(f"[{j.id}] {val}")
-            elif kind == "step":
-                if val != j.step:
-                    _diag(f"[{j.id}] paso: {val}")
-                    j.step, j.step_started, j.sub = val, time.time(), 0.0
-            elif kind == "dl":
-                self.dl_update(j, val)
-            elif kind == "sub":
-                j.sub = float(val)
-            elif kind == "meta":
-                j.title = val.get("title") or j.title
-                j.artist = val.get("artist") or j.artist
-            elif kind == "done":
-                j.state, j.result, j.step = "done", val, "finish"
-                break
-            elif kind == "error":
-                if j.state != "cancelled":
-                    j.state, j.error = "error", val
-                break
+            try:
+                j.proc.wait(timeout=30)
+            except Exception:
+                _kill_tree(j.proc.pid)
+        if j.state == "running":  # terminó sin avisar: mostrar el motivo
+            tail = err_file.read_text(encoding="utf-8", errors="replace")[-1500:] if err_file.exists() else ""
+            j.state = "error"
+            j.error = "El proceso terminó inesperadamente."
+            if tail.strip():
+                j.log.append(tail)
+                _diag(f"[{j.id}] stderr: {tail}")
         j.finished = time.time()
         _diag(f"[{j.id}] fin: estado={j.state} paso={j.step} error={j.error}")
-        j.proc.join(timeout=5)
+        for f in (spec_file, err_file):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+
+
+MARK = "@@KE@@"
+
+
+class _LineQueue:
+    """Sustituye a multiprocessing.Queue: cada mensaje es una línea JSON marcada en stdout."""
+    def __init__(self, out):
+        import threading as _t
+        self.out, self.lock = out, _t.Lock()
+
+    def put(self, msg):
+        import json
+        with self.lock:
+            self.out.write(MARK + json.dumps(list(msg), ensure_ascii=False) + "\n")
+            self.out.flush()
+
+
+def worker_main(spec_path):
+    """Punto de entrada del proceso de trabajo (KaraokeEngine.exe --worker spec.json)."""
+    import json
+    import os
+    import sys
+    spec = json.loads(open(spec_path, encoding="utf-8").read())
+    # stdout queda solo para los mensajes; lo que impriman las librerías va a stderr
+    out = os.fdopen(os.dup(sys.stdout.fileno()), "w", encoding="utf-8", buffering=1)
+    sys.stdout = sys.stderr
+    _worker(spec, _LineQueue(out))
 
 
 def _diag(line):
@@ -252,6 +315,7 @@ def _kill_tree(pid):
         else:
             import os
             import signal
+            subprocess.run(["pkill", "-KILL", "-P", str(pid)], capture_output=True)  # hijos (ffmpeg…)
             os.kill(pid, signal.SIGKILL)
     except Exception:
         pass
