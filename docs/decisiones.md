@@ -25,3 +25,15 @@
 4. Cumplir la GPL de ffmpeg: publicar o enlazar el código fuente de ffmpeg.
 
 **Cómo sabremos si funciona:** 5 entrevistas con profesores, que confirmen el problema y den una disposición a pagar, y después 10 profesores en prueba gratis. Si menos de 3 de cada 10 pasan a pagar, se revisa el segmento.
+
+## 2026-11-23 · Segmento eventos
+**Decisión:** el mismo programa tendrá una **licencia "Eventos"**, más cara, con procesamiento en lote, motor con GPU, modo fiesta y segunda pantalla. Sale después de la versión para profesores.
+**Condiciones:**
+- Cada cliente procesa su propia música en su equipo.
+- En la versión Eventos no se promociona la descarga desde YouTube.
+- Los términos de uso dejan al cliente como responsable de los derechos y de la licencia de reproducción pública (SCD, SGAE, etc.).
+
+## 2026-11-23 · DESCARTADO: biblioteca de canciones ya procesadas
+**Opciones descartadas:** subir pistas procesadas a YouTube; vender una biblioteca de canciones; regalarla junto con el programa.
+**Por qué:** la pista sin voz sale de la grabación original. Repartirla, cobrando o gratis, es distribuir copias de obras protegidas, y quien las distribuye es el responsable.
+**Sí se permite:** canciones de dominio público, con licencia libre, propias o autorizadas por escrito.
