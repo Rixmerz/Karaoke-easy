@@ -91,3 +91,9 @@ def test_download_stall_gives_clear_error(tmp_path):
         assert "no avanza" in str(e.value) or "timed out" in str(e.value).lower()
     finally:
         httpd.shutdown()
+
+
+def test_is_url_accepts_paths():
+    from pathlib import Path
+    assert not is_url(Path("/tmp/tema.mp3"))
+    assert not is_url(None)

@@ -467,6 +467,35 @@ function onboarding(step = 0) {
   if (step === 1) $("obPick").onclick = async () => { if (!T?.dialog) return; const r = await T.dialog.open({ directory: true }); if (r) $("obOut").value = r; };
 }
 
+// ---------------- autoprueba de punta a punta (como un usuario) ----------------
+async function e2eSelftest(url) {
+  const say = m => T.core.invoke("selftest_log", { msg: m }).catch(() => { });
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  closeModal();
+  go("new"); $("links").value = url; $("addLinks").click();
+  say(`cola: ${JSON.stringify(QUEUE)} · botón crear ${$("create").disabled ? "DESACTIVADO" : "activo"}`);
+  if ($("create").disabled) { say("ERROR: el botón Crear karaoke quedó desactivado"); return false; }
+  $("create").click();
+  const t0 = Date.now(); let last = "", job = null;
+  while (Date.now() - t0 < 15 * 60 * 1000) {
+    await sleep(1000);
+    job = JOBS[JOBS.length - 1];
+    const card = document.querySelector("#jobsList .job");
+    const txt = job ? `${job.state} paso=${job.step} ${Math.round(job.fraction * 100)}% ${card ? "| tarjeta: " + card.querySelector(".state")?.textContent + (card.querySelector(".dl") ? " · " + card.querySelector(".dl").innerText : "") : "| SIN TARJETA"}` : "sin trabajo en la lista";
+    if (txt !== last) { say(`${Math.round((Date.now() - t0) / 1000)}s ${txt}`); last = txt; }
+    if (job && ["done", "error", "cancelled"].includes(job.state)) break;
+  }
+  if (!job || job.state !== "done") { say("ERROR: " + (job ? job.state + " " + (job.error || "") : "no se creó el trabajo")); (job?.log || []).slice(-30).forEach(l => say("  " + l)); return false; }
+  // la canción nueva debe aparecer en la biblioteca y abrirse en el reproductor
+  go("library"); await loadLibrary();
+  const sid = job.result?.song_id;
+  if (!LIB.some(s => s.id === sid)) { say("ERROR: la canción no apareció en la biblioteca"); return false; }
+  await openSong(sid); for (let i = 0; i < 20 && inst.readyState < 1; i++) await sleep(500);
+  const okPlayer = $("player").classList.contains("on") && inst.readyState >= 1 && lines.length > 0;
+  say(`reproductor: abierto=${$("player").classList.contains("on")} audio=${inst.readyState} versos=${lines.length}`);
+  return okPlayer;
+}
+
 // ---------------- arranque ----------------
 function splash(txt) { if (txt) $("splashTxt").textContent = txt; }
 async function boot() {
@@ -475,7 +504,7 @@ async function boot() {
   if (T?.core) {
     splash("Iniciando el motor…");
     const info = await T.core.invoke("engine_info");          // {url, token, selftest}
-    API.base = info.url; API.token = info.token; window.SELFTEST = info.selftest;
+    API.base = info.url; API.token = info.token; window.SELFTEST = info.selftest; window.SELFTEST_URL = info.selftest_url;
   } else {
     API.base = location.origin + "/"; API.token = new URLSearchParams(location.search).get("t") || "";
   }
@@ -490,7 +519,8 @@ async function boot() {
   pollJobs(); setInterval(pollJobs, 1000);
   setTimeout(() => checkUpdate(false), 4000);
   if (window.SELFTEST && T?.core) {      // prueba automática de la app instalada
-    const ok = Array.isArray(LIB) && VERSION !== "0";
+    let ok = Array.isArray(LIB) && VERSION !== "0";
+    if (ok && window.SELFTEST_URL) ok = await e2eSelftest(window.SELFTEST_URL);
     await T.core.invoke("selftest_done", { ok });
   }
 }

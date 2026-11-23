@@ -42,6 +42,7 @@ def _worker(spec, q):
             log(f"Descargando enlace (motor JavaScript: {'listo' if deno_path() else 'no encontrado'})…")
             src, a, t = download(src, Path(out_dir) / "descargas", want_video=spec.get("use_source_video", True),
                                  log=log, progress=lambda p: q.put(("sub", p)), status=lambda d: q.put(("dl", d)))
+            src = str(src)  # la descarga devuelve una ruta (Path); el resto del proceso usa texto
             q.put(("dl", None))
             artist, title = artist or a, title or t
             q.put(("meta", {"title": title, "artist": artist}))

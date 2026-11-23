@@ -10,8 +10,8 @@ from . import paths
 URL_RE = re.compile(r"^(https?://|www\.)", re.I)
 
 
-def is_url(s: str) -> bool:
-    return bool(URL_RE.match((s or "").strip()))
+def is_url(s) -> bool:
+    return bool(URL_RE.match(str(s or "").strip()))
 
 
 def deno_path():

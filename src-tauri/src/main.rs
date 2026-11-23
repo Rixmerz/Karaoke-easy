@@ -21,11 +21,25 @@ struct Info {
     url: String,
     token: String,
     selftest: bool,
+    /// Autoprueba de punta a punta: la interfaz pega este enlace, crea el karaoke y espera el resultado.
+    selftest_url: Option<String>,
 }
 
 #[tauri::command]
 fn engine_info(state: tauri::State<'_, Engine>) -> Result<Info, String> {
     state.info.clone()
+}
+
+#[tauri::command]
+fn selftest_log(msg: String) {
+    println!("UI: {msg}");
+    // en Windows la app no tiene consola: dejar también el registro en un archivo
+    if let Ok(dir) = std::env::var("KARAOKE_UI_SELFTEST_LOG") {
+        use std::io::Write;
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir) {
+            let _ = writeln!(f, "{msg}");
+        }
+    }
 }
 
 #[tauri::command]
@@ -122,6 +136,7 @@ fn start_engine() -> Result<(Child, Info), String> {
         url: format!("http://127.0.0.1:{}/", parts[1]),
         token,
         selftest: std::env::var("KARAOKE_UI_SELFTEST").is_ok(),
+        selftest_url: std::env::var("KARAOKE_UI_SELFTEST_URL").ok(),
     };
     Ok((child, info))
 }
@@ -136,7 +151,7 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .manage(Engine { child: Mutex::new(child), info })
-        .invoke_handler(tauri::generate_handler![engine_info, selftest_done, run_installer])
+        .invoke_handler(tauri::generate_handler![engine_info, selftest_done, selftest_log, run_installer])
         .build(tauri::generate_context!())
         .expect("error al iniciar Karaoke Easy");
     app.run(|handle, event| {

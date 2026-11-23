@@ -158,7 +158,20 @@ jobs:
           Stop-Process $eng.Id -Force -ErrorAction SilentlyContinue; Stop-Process $srv.Id -ErrorAction SilentlyContinue
           Get-Process KaraokeEngine -ErrorAction SilentlyContinue | Stop-Process -Force
           if ($st -ne "done") { throw "El flujo real de la app no terminó (estado: $st)" }
-          "Flujo real de la app OK"
+          "Flujo del motor OK"
+          # Ahora como un usuario: la app instalada pega el enlace, pulsa "Crear karaoke", espera y abre el reproductor
+          $srv2 = Start-Process python -ArgumentList "-m","http.server","8766","--bind","127.0.0.1","--directory","web2" -PassThru
+          $env:KARAOKE_UI_SELFTEST = "1"
+          $env:KARAOKE_UI_SELFTEST_URL = "http://127.0.0.1:8766/cancion%20prueba.wav"
+          $env:KARAOKE_UI_SELFTEST_LOG = "$PWD\ui_e2e.log"
+          $pe = Start-Process C:\KE\KaraokeEasy.exe -PassThru
+          $okE2E = $pe.WaitForExit(1200000)
+          Get-Content ui_e2e.log -ErrorAction SilentlyContinue
+          Remove-Item Env:KARAOKE_UI_SELFTEST, Env:KARAOKE_UI_SELFTEST_URL, Env:KARAOKE_UI_SELFTEST_LOG
+          Stop-Process $srv2.Id -ErrorAction SilentlyContinue
+          if (-not $okE2E) { Stop-Process $pe.Id -Force; throw "La prueba de punta a punta desde la interfaz no terminó en 20 min" }
+          if ($pe.ExitCode -ne 0) { throw "La prueba de punta a punta desde la interfaz falló" }
+          "Flujo real desde la interfaz OK"
       - uses: actions/upload-artifact@v4
         with:
           name: resultado-prueba
