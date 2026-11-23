@@ -30,6 +30,7 @@ class Options:
     height: int = 1080
     device: str = "auto"  # auto | cpu | cuda
     guide_track: bool = True
+    make_video: bool = True  # crear el MP4 y el MP3 además del paquete del reproductor
     lyrics_text: str | None = None  # letra correcta (LRC o texto plano); None = solo Whisper
     auto_lyrics: bool = True
     artist_hint: str = ""  # artista/título para buscar la letra (p. ej. desde los datos del enlace)
@@ -376,7 +377,7 @@ class KaraokeBuilder:
                     "-disposition:a:1", "0"]
         run_ffmpeg([*vin, "-i", str(audio.resolve()), *gin, "-filter_complex", fc, "-map", "[v]", "-map", "1:a",
                     *gmap, "-metadata:s:a:0", "title=Karaoke (sin voz)", "-disposition:a:0", "default",
-                    "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-c:a", "aac", "-b:a", "192k",
+                    "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", "-b:a", "192k",
                     "-shortest", "-movflags", "+faststart", str(out.resolve())], cwd=str(self.work))
         return out
 
@@ -406,6 +407,16 @@ class KaraokeBuilder:
         self.check_cancel()
         self.step("video")
         self.detect_key(inst)
+        if not self.o.make_video:
+            # Solo el reproductor de la app: sin vídeo ni MP3 (es lo más lento de todo el proceso)
+            self.step("finish")
+            self.log("Preparando la canción para el reproductor…")
+            from .library import write_package
+            self.package = write_package(self, words, inst, voc, run_ffmpeg)
+            self.progress(1)
+            self.words = words
+            self.log("Listo. (El video MP4 está desactivado en Ajustes.)")
+            return None, None
         track = self.transpose(inst); self.progress(4 / steps)
         self.check_cancel()
         suffix = "" if self.o.semitones == 0 else f"_{music.key_name(self.key[0] + self.o.semitones, self.key[1])}"

@@ -54,6 +54,7 @@ def _worker(spec, q):
         opts = Options(input_path=src, output_dir=out_dir, semitones=spec.get("semitones", 0),
                        whisper_model=spec.get("whisper_model", "small"), language=spec.get("language"),
                        use_source_video=spec.get("use_source_video", True), guide_track=spec.get("guide_track", True),
+                       make_video=spec.get("export_mp4", True),
                        lyrics_text=spec.get("lyrics") or None, artist_hint=artist, title_hint=title)
         if spec.get("quality") == "720":
             opts.width, opts.height = 1280, 720
@@ -64,7 +65,7 @@ def _worker(spec, q):
             import json as _j
             m = _j.loads((b.package / "cancion.json").read_text(encoding="utf-8"))
             q.put(("meta", {"title": m.get("title"), "artist": m.get("artist")}))
-        q.put(("done", {"video": str(video), "mp3": str(mp3), "folder": str(b.out),
+        q.put(("done", {"video": str(video) if video else None, "mp3": str(mp3) if mp3 else None, "folder": str(b.out),
                         "song_id": song_id(b.package) if b.package else None}))
     except Exception as e:
         q.put(("log", traceback.format_exc()))

@@ -10,7 +10,7 @@ DEFAULTS = {
     "quality": "1080",         # 720 | 1080
     "guide_track": True,       # pista de voz guía dentro del MP4
     "use_source_video": True,  # usar el vídeo original de fondo si existe
-    "make_video": True,        # generar también el MP4 (además del reproductor)
+    "export_mp4": False,       # crear también el video MP4 (lento; el reproductor de la app no lo necesita)
     "cookies_browser": "",     # "" | firefox | edge | chrome | brave: sesión del navegador para YouTube
 }
 

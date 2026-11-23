@@ -277,7 +277,7 @@ $("create").onclick = async () => {
   if (!QUEUE.length) return;
   if (!MODELS_READY) { toast("Primero descarga los componentes en Ajustes", "err"); go("settings"); return; }
   const single = QUEUE.length === 1;
-  const options = { semitones, language: $("optLang").value || null, use_source_video: $("optVideoBg").checked, guide_track: $("optGuide").checked };
+  const options = { semitones, language: $("optLang").value || null, use_source_video: $("optVideoBg").checked, guide_track: $("optGuide").checked, export_mp4: $("optMp4").checked };
   if (single) Object.assign(options, { lyrics: $("lyText").value.trim() || null, artist: $("lyArtist").value.trim(), title: $("lyTitle").value.trim() });
   try {
     await api("jobs", { inputs: QUEUE, options });
@@ -365,16 +365,16 @@ async function notifyDone(j) {
 async function loadSettings() {
   const s = await api("settings");
   $("sOut").value = s.output_dir; $("sLang").value = s.language || ""; $("sQuality").value = s.quality;
-  $("sVideoBg").checked = s.use_source_video; $("sGuide").checked = s.guide_track; $("sCookies").value = s.cookies_browser || "";
+  $("sVideoBg").checked = s.use_source_video; $("sMp4").checked = !!s.export_mp4; $("sGuide").checked = s.guide_track; $("sCookies").value = s.cookies_browser || "";
   $("sTheme").value = localStorage.getItem("ke_theme") || "dark";
-  $("optVideoBg").checked = s.use_source_video; $("optGuide").checked = s.guide_track; $("optLang").value = s.language || "";
+  $("optVideoBg").checked = s.use_source_video; $("optMp4").checked = !!s.export_mp4; $("optGuide").checked = s.guide_track; $("optLang").value = s.language || "";
 }
 async function saveSettings() {
   await api("settings", { output_dir: $("sOut").value.trim(), language: $("sLang").value || null, quality: $("sQuality").value,
-    use_source_video: $("sVideoBg").checked, guide_track: $("sGuide").checked, cookies_browser: $("sCookies").value });
+    use_source_video: $("sVideoBg").checked, export_mp4: $("sMp4").checked, guide_track: $("sGuide").checked, cookies_browser: $("sCookies").value });
   toast("Ajustes guardados", "ok", 1500);
 }
-["sOut", "sLang", "sQuality", "sVideoBg", "sGuide", "sCookies"].forEach(id => $(id).onchange = saveSettings);
+["sOut", "sLang", "sQuality", "sVideoBg", "sGuide", "sCookies", "sMp4"].forEach(id => $(id).onchange = saveSettings);
 $("sTheme").onchange = () => { localStorage.setItem("ke_theme", $("sTheme").value); applyTheme(); };
 function applyTheme() { document.documentElement.dataset.theme = localStorage.getItem("ke_theme") || "dark"; }
 $("sOutPick").onclick = async () => {

@@ -264,10 +264,11 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
                 for item in body.get("inputs", []):
                     spec = {"input": item, "output_dir": st["output_dir"], "language": st["language"],
                             "quality": st["quality"], "guide_track": st["guide_track"],
-                            "use_source_video": st["use_source_video"], "cookies_browser": st.get("cookies_browser", "")}
+                            "use_source_video": st["use_source_video"], "export_mp4": st.get("export_mp4", False),
+                            "cookies_browser": st.get("cookies_browser", "")}
                     spec.update({k: v for k, v in body.get("options", {}).items()
                                  if k in ("semitones", "language", "lyrics", "artist", "title", "guide_track",
-                                          "use_source_video", "quality")})
+                                          "use_source_video", "quality", "export_mp4")})
                     out.append(jobs.add(spec).public())
                 return self._json(out)
             if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "cancel" and jobs is not None:

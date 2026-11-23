@@ -60,8 +60,9 @@
             <div class="sub" style="font-size:12px">También puedes cambiarlo en vivo al cantar.</div></div>
           <div class="opt"><label>Idioma de la letra</label>
             <select class="field" id="optLang"><option value="">Automático</option><option value="es">Español</option><option value="en">Inglés</option><option value="pt">Portugués</option><option value="it">Italiano</option><option value="fr">Francés</option><option value="de">Alemán</option></select></div>
-          <div class="opt"><label>Video</label>
-            <label class="switch"><input type="checkbox" id="optVideoBg" checked> Usar el video original de fondo</label>
+          <div class="opt"><label>Video MP4</label>
+            <label class="switch"><input type="checkbox" id="optMp4"> Crear también un video MP4 <span class="sub" style="font-size:12px">(tarda bastante más; para cantar en la app no hace falta)</span></label>
+            <label class="switch" style="margin-top:8px"><input type="checkbox" id="optVideoBg" checked> Usar el video original de fondo</label>
             <label class="switch" style="margin-top:8px"><input type="checkbox" id="optGuide" checked> Incluir pista con voz en el MP4</label></div>
         </div>
         <div class="opt" id="lyrOpt" style="padding-bottom:16px"><label>Letra (opcional — si la dejas vacía se busca sola)</label>
@@ -92,6 +93,8 @@
           <input class="field" id="sOut" style="width:340px"><button class="btn sm" id="sOutPick">Elegir…</button><button class="btn sm" id="sOutOpen">Abrir</button></div>
         <div class="set"><div class="t">Idioma por defecto de la letra<span>Automático detecta el idioma de cada canción</span></div>
           <select class="field" id="sLang"><option value="">Automático</option><option value="es">Español</option><option value="en">Inglés</option><option value="pt">Portugués</option><option value="it">Italiano</option><option value="fr">Francés</option><option value="de">Alemán</option></select></div>
+        <div class="set"><div class="t">Crear también video MP4<span>Para verlo fuera de la app (TV, YouTube…). Es la parte más lenta del proceso.</span></div>
+          <label class="switch"><input type="checkbox" id="sMp4"></label></div>
         <div class="set"><div class="t">Calidad del video<span>720p crea archivos más livianos y más rápido</span></div>
           <select class="field" id="sQuality"><option value="1080">1080p</option><option value="720">720p</option></select></div>
         <div class="set"><div class="t">Video original de fondo<span>Si la canción es un video, usarlo (desenfocado) como fondo</span></div>
