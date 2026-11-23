@@ -11,6 +11,7 @@ DEFAULTS = {
     "guide_track": True,       # pista de voz guía dentro del MP4
     "use_source_video": True,  # usar el vídeo original de fondo si existe
     "make_video": True,        # generar también el MP4 (además del reproductor)
+    "cookies_browser": "",     # "" | firefox | edge | chrome | brave: sesión del navegador para YouTube
 }
 
 

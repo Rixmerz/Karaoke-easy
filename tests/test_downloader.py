@@ -97,3 +97,10 @@ def test_is_url_accepts_paths():
     from pathlib import Path
     assert not is_url(Path("/tmp/tema.mp3"))
     assert not is_url(None)
+
+
+def test_friendly_errors():
+    from karaoke_easy.downloader import friendly_error
+    assert "robot" in friendly_error("ERROR: [youtube] x: Sign in to confirm you’re not a bot. This helps")
+    assert "no está disponible" in friendly_error("ERROR: [youtube] x: Video unavailable")
+    assert friendly_error("ERROR: algo raro") == "algo raro"

@@ -339,12 +339,14 @@ function renderJobs() {
       <div class="pbar"><i style="width:${pct}%"></i></div>
       <div class="pinfo"><span>${pct} %</span><span>${j.state === "running" ? eta(j.eta) : j.state === "queued" ? "esperando turno" : ""}</span></div>
       ${j.state === "running" && j.download ? `<div class="dl">${dlLine(j.download)}</div>` : ""}`}
-      ${j.state === "error" ? `<div class="errmsg">No se pudo preparar esta canción. ${esc(j.error || "")}</div>` : ""}
+      ${j.state === "error" ? `<div class="errmsg">${icon("circle-alert", 15)} ${esc(j.error || "No se pudo preparar esta canción.")}
+        ${/robot|navegador/.test(j.error || "") ? ` <button class="btn sm" data-go2="settings">Abrir Ajustes</button>` : ""}</div>` : ""}
       ${j.log?.length ? `<details data-id="${j.id}" ${open.has(j.id) ? "open" : ""}><summary class="sub" style="cursor:pointer;margin-top:10px">Detalles técnicos</summary><pre class="log">${esc(j.log.join("\n"))}</pre></details>` : ""}`;
     L.appendChild(d);
   }
   L.querySelectorAll("[data-c]").forEach(b => b.onclick = async () => { await api(`jobs/${b.dataset.c}/cancel`, {}); toast("Cancelada"); pollJobs(); });
   L.querySelectorAll("[data-p]").forEach(b => b.onclick = () => openSong(b.dataset.p));
+  L.querySelectorAll("[data-go2]").forEach(b => b.onclick = () => go(b.dataset.go2));
   L.querySelectorAll("[data-f]").forEach(b => b.onclick = () => openPath(b.dataset.f));
 }
 $("clearJobs").onclick = async () => { await api("jobs/clear", {}); pollJobs(); };
@@ -363,16 +365,16 @@ async function notifyDone(j) {
 async function loadSettings() {
   const s = await api("settings");
   $("sOut").value = s.output_dir; $("sLang").value = s.language || ""; $("sQuality").value = s.quality;
-  $("sVideoBg").checked = s.use_source_video; $("sGuide").checked = s.guide_track;
+  $("sVideoBg").checked = s.use_source_video; $("sGuide").checked = s.guide_track; $("sCookies").value = s.cookies_browser || "";
   $("sTheme").value = localStorage.getItem("ke_theme") || "dark";
   $("optVideoBg").checked = s.use_source_video; $("optGuide").checked = s.guide_track; $("optLang").value = s.language || "";
 }
 async function saveSettings() {
   await api("settings", { output_dir: $("sOut").value.trim(), language: $("sLang").value || null, quality: $("sQuality").value,
-    use_source_video: $("sVideoBg").checked, guide_track: $("sGuide").checked });
+    use_source_video: $("sVideoBg").checked, guide_track: $("sGuide").checked, cookies_browser: $("sCookies").value });
   toast("Ajustes guardados", "ok", 1500);
 }
-["sOut", "sLang", "sQuality", "sVideoBg", "sGuide"].forEach(id => $(id).onchange = saveSettings);
+["sOut", "sLang", "sQuality", "sVideoBg", "sGuide", "sCookies"].forEach(id => $(id).onchange = saveSettings);
 $("sTheme").onchange = () => { localStorage.setItem("ke_theme", $("sTheme").value); applyTheme(); };
 function applyTheme() { document.documentElement.dataset.theme = localStorage.getItem("ke_theme") || "dark"; }
 $("sOutPick").onclick = async () => {

@@ -40,8 +40,14 @@ def _worker(spec, q):
             q.put(("dl", {"phase": "start"}))
             from .downloader import deno_path
             log(f"Descargando enlace (motor JavaScript: {'listo' if deno_path() else 'no encontrado'})…")
-            src, a, t = download(src, Path(out_dir) / "descargas", want_video=spec.get("use_source_video", True),
-                                 log=log, progress=lambda p: q.put(("sub", p)), status=lambda d: q.put(("dl", d)))
+            from .downloader import friendly_error
+            try:
+                src, a, t = download(src, Path(out_dir) / "descargas", want_video=spec.get("use_source_video", True),
+                                     log=log, progress=lambda p: q.put(("sub", p)), status=lambda d: q.put(("dl", d)),
+                                     cookies_browser=spec.get("cookies_browser") or "")
+            except Exception as e:
+                log(traceback.format_exc())
+                raise RuntimeError(friendly_error(str(e))) from None
             src = str(src)  # la descarga devuelve una ruta (Path); el resto del proceso usa texto
             q.put(("dl", None))
             artist, title = artist or a, title or t

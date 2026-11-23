@@ -239,7 +239,7 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None):
                 for item in body.get("inputs", []):
                     spec = {"input": item, "output_dir": st["output_dir"], "language": st["language"],
                             "quality": st["quality"], "guide_track": st["guide_track"],
-                            "use_source_video": st["use_source_video"]}
+                            "use_source_video": st["use_source_video"], "cookies_browser": st.get("cookies_browser", "")}
                     spec.update({k: v for k, v in body.get("options", {}).items()
                                  if k in ("semitones", "language", "lyrics", "artist", "title", "guide_track",
                                           "use_source_video", "quality")})

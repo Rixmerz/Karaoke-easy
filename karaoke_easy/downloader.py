@@ -54,8 +54,30 @@ class Stalled(Exception):
     pass
 
 
+def friendly_error(msg: str) -> str:
+    """Traduce los errores habituales de yt-dlp a algo entendible."""
+    m = str(msg)
+    low = m.lower()
+    if "confirm you" in low and "bot" in low:
+        return ("YouTube pidió verificar que no eres un robot. Activa en Ajustes › Descargas la opción "
+                "«Usar la sesión de mi navegador» (con YouTube abierto en ese navegador) o descarga el video "
+                "por tu cuenta y arrástralo a la app.")
+    if "private video" in low or "members-only" in low or "sign in to confirm your age" in low:
+        return "El video es privado, solo para miembros o con restricción de edad: YouTube no permite descargarlo sin iniciar sesión."
+    if "video unavailable" in low or "not available" in low:
+        return "El video no está disponible (eliminado, bloqueado en tu país o enlace incorrecto)."
+    if "unsupported url" in low:
+        return "Ese enlace no es de un sitio compatible."
+    if "could not copy" in low and "cookie" in low:
+        return ("No se pudieron leer las cookies del navegador. Ciérralo por completo e inténtalo otra vez, "
+                "o elige otro navegador en Ajustes (Firefox suele funcionar mejor).")
+    if "no avanza" in low or "timed out" in low or "getaddrinfo" in low or "connection" in low:
+        return "No se pudo descargar: la conexión es lenta o se cortó. Revisa tu internet e inténtalo de nuevo."
+    return m.replace("ERROR: ", "")
+
+
 def download(url: str, out_dir, want_video=True, log=print, progress=lambda p: None, status=lambda d: None,
-             stall_seconds=120):
+             stall_seconds=120, cookies_browser=""):
     """Descarga el enlace en out_dir. Devuelve (ruta_archivo, artista, título)."""
     import imageio_ffmpeg
     import yt_dlp
@@ -107,6 +129,9 @@ def download(url: str, out_dir, want_video=True, log=print, progress=lambda p: N
         "fragment_retries": 5,
         "concurrent_fragment_downloads": 4,
     }
+    if cookies_browser:
+        opts["cookiesfrombrowser"] = (cookies_browser,)
+        log(f"Usando la sesión de {cookies_browser} para la descarga.")
     d = deno_path()
     if d:
         opts["js_runtimes"] = {"deno": {"path": d}}
