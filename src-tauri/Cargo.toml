@@ -18,11 +18,15 @@ tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Steamworks (solo edición Steam: cargo build --features steam)
+steamworks = { version = "0.13", optional = true }
 
 [features]
 # Usa la interfaz empaquetada (../ui) en lugar de un servidor de desarrollo
 custom-protocol = ["tauri/custom-protocol"]
 default = ["custom-protocol"]
+# Edición Steam: inicia el cliente de Steam y expone logros. Requiere steam_api64.dll junto al exe.
+steam = ["dep:steamworks"]
 
 [profile.release]
 opt-level = "s"

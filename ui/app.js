@@ -244,6 +244,7 @@ function addInputs(list) {
   for (let x of list) {
     x = (x || "").trim(); if (!x) continue;
     const isUrl = /^(https?:\/\/|www\.)/i.test(x);
+    if (isUrl && STEAM) { toast("La versión de Steam no descarga canciones desde enlaces: usa archivos de tu equipo.", "err", 5000); continue; }
     if (!isUrl && !EXT.includes(x.split(".").pop().toLowerCase())) { toast("Formato no compatible: " + x.split(/[\\/]/).pop(), "err"); continue; }
     if (!QUEUE.includes(x)) { QUEUE.push(x); n++; }
   }
@@ -293,7 +294,7 @@ if (T?.webview) {
 document.addEventListener("dragover", e => e.preventDefault());
 document.addEventListener("drop", e => e.preventDefault());
 document.addEventListener("paste", e => {
-  if ($("player").classList.contains("on") || ["TEXTAREA", "INPUT"].includes(e.target.tagName)) return;
+  if (STEAM || $("player").classList.contains("on") || ["TEXTAREA", "INPUT"].includes(e.target.tagName)) return;
   const t = e.clipboardData.getData("text"); if (/https?:\/\//.test(t)) { go("new"); addInputs(t.split(/\s+/)); toast("Enlace añadido", "ok", 1500); }
 });
 document.addEventListener("keydown", e => {
@@ -322,7 +323,8 @@ $("create").onclick = async () => {
   if (!QUEUE.length) return;
   if (LIC && !LIC.features.create) { licenseBlocked(); return; }
   if (LIC && LIC.max_queued && JOBS.filter(j => j.state === "running" || j.state === "queued").length + QUEUE.length > LIC.max_queued)
-    return licenseBlocked(`Con el plan ${LIC.label} puedes tener hasta ${LIC.max_queued} canciones en proceso a la vez. Espera a que terminen o pásate al plan Eventos para procesar muchas de una vez.`);
+    return licenseBlocked(STEAM ? `Puedes tener hasta ${LIC.max_queued} canciones en proceso a la vez. Espera a que terminen. Para procesar muchas de una vez (uso comercial) necesitas la licencia Eventos.`
+      : `Con el plan ${LIC.label} puedes tener hasta ${LIC.max_queued} canciones en proceso a la vez. Espera a que terminen o pásate al plan Eventos para procesar muchas de una vez.`);
   if (!MODELS_READY) { toast("Primero descarga los componentes en Ajustes", "err"); go("settings"); return; }
   const single = QUEUE.length === 1;
   const options = { semitones, language: $("optLang").value || null, use_source_video: $("optVideoBg").checked, guide_track: $("optGuide").checked, export_mp4: $("optMp4").checked };
@@ -444,6 +446,7 @@ const vnum = v => v.split(".").map(n => +n || 0);
 const newer = (a, b) => { const x = vnum(a), y = vnum(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
 let BUNDLED = true;
 async function checkUpdate(manual) {
+  if (STEAM) return;  // Steam entrega las actualizaciones
   try {
     const r = await (await fetch("https://api.github.com/repos/Rixmerz/Karaoke-easy/releases/latest")).json();
     const v = (r.tag_name || "").replace(/^v/, "");
@@ -499,11 +502,11 @@ $("sModelsBtn").onclick = async () => {
 function onboarding(step = 0) {
   const steps = [
     ["Bienvenido a Karaoke Easy", `<p>Convierte cualquier canción en un karaoke: <b>quita la voz</b>, prepara la <b>letra sincronizada</b> y te deja cantar con <b>el tono que prefieras</b>.</p>
-      <p class="sub">Funciona sin internet (solo lo usa para buscar letras y descargar enlaces).</p>`],
+      <p class="sub">Funciona sin internet (solo lo usa para buscar letras${STEAM ? "" : " y descargar enlaces"}).</p>`],
     ["¿Dónde guardamos tus karaokes?", `<p class="sub">Aquí se guardan los videos, las pistas sin voz y tu biblioteca.</p>
       <div class="row"><input class="field" id="obOut" style="flex:1" value="${esc($("sOut").value)}"><button class="btn sm" id="obPick">Elegir…</button></div>`],
     ["Así se canta", `<div class="checks" style="gap:10px">
-      <div>${icon("plus", 16)} <b>Nueva canción</b>: arrastra un archivo o pega un enlace.</div>
+      <div>${icon("plus", 16)} <b>Nueva canción</b>: arrastra un archivo${STEAM ? "" : " o pega un enlace"}.</div>
       <div>${icon("mic", 16)} <b>Voz</b>: súbela o bájala en vivo (tecla V).</div>
       <div>${icon("music-2", 16)} <b>Tono</b>: + y − para cantarla más alta o más baja.</div>
       <div>${icon("party-popper", 16)} <b>Modo fiesta</b>: varias canciones seguidas.</div>
@@ -546,6 +549,16 @@ async function e2eSelftest(url) {
   return okPlayer;
 }
 
+// ---------------- edición (direct / steam) ----------------
+let STEAM = false;
+function applyEdition(vi) {
+  STEAM = vi?.edition === "steam";
+  if (!STEAM) return;
+  for (const id of ["linksOr", "linksRow", "addLinks", "updateBox", "sUpd", "licBadge"]) { const el = $(id); if (el) el.hidden = true; }
+  $("updateBox").style.display = "none";
+  $("links").placeholder = "";
+}
+
 // ---------------- licencia ----------------
 let LIC = null;
 const licAllows = f => !LIC || !!LIC.features[f];
@@ -560,6 +573,17 @@ function licenseBlocked(msg) {
 async function refreshLicense() {
   try { LIC = await api("license"); } catch (e) { return; }
   const b = $("licBadge");
+  if (STEAM || LIC.edition === "steam") {   // Steam da la licencia personal: solo se ofrece Eventos (uso comercial)
+    b.hidden = true;
+    const ev = LIC.state === "eventos";
+    $("sLicState").textContent = ev ? `Plan Eventos · clave ${LIC.key_hint}`
+      : "Uso personal incluido con tu compra en Steam. Para uso comercial (bares, eventos), activa una licencia Eventos.";
+    $("sLicKey").placeholder = "Clave de licencia Eventos";
+    $("sLicKey").hidden = $("sLicAct").hidden = !!LIC.tier;
+    $("sLicDeact").hidden = $("sLicCheck").hidden = !LIC.tier;
+    $("sLicBuy").hidden = ev; $("sLicBuy").textContent = "Comprar licencia Eventos";
+    return;
+  }
   if (LIC.state === "trial") { b.hidden = false; b.textContent = `Prueba: ${LIC.days_left} ${LIC.days_left === 1 ? "día" : "días"}`; }
   else if (LIC.state === "unlicensed" || LIC.state === "reconnect") { b.hidden = false; b.textContent = LIC.state === "reconnect" ? "Verificar licencia" : "Sin licencia"; }
   else b.hidden = true;
@@ -606,7 +630,7 @@ async function boot() {
   } else {
     API.base = location.origin + "/"; API.token = new URLSearchParams(location.search).get("t") || "";
   }
-  try { const vi = await api("version"); VERSION = vi.version; BUNDLED = vi.bundled_models; } catch (e) { }
+  try { const vi = await api("version"); VERSION = vi.version; BUNDLED = vi.bundled_models; applyEdition(vi); } catch (e) { }
   await refreshModels();
   await refreshLicense();
   $("ver").textContent = VERSION; $("sAbout").textContent = "Karaoke Easy " + VERSION;
