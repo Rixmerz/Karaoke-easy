@@ -132,3 +132,6 @@
 6. Lanzamiento.
 
 **Meta de validación:** 5.000 deseados antes del lanzamiento. Si en 8 semanas hay menos de 1.000, se revisa todo el plan.
+
+## 2026-11-25 · Aclaración: modo fiesta y segunda pantalla en Steam
+El modo fiesta y la segunda pantalla quedan **incluidos en la versión de Steam** para uso personal: son el corazón de la fiesta en casa. La licencia Eventos se diferencia por el **uso comercial** y por el **procesamiento en lote sin límite**, no por estas funciones.
