@@ -46,8 +46,19 @@ if __name__ == "__main__":
     import multiprocessing as _mp
 
     _mp.freeze_support()  # necesario para los procesos de trabajo en el .exe
+    if "--gpu-selftest" in sys.argv:  # Motor GPU: ¿funciona CUDA aquí? (lo llama el motor CPU)
+        from karaoke_easy.gpu import selftest_main
+
+        selftest_main()
+        sys.stdout.flush()
+        os._exit(0)
     if "--worker" in sys.argv:
         from karaoke_easy.jobs import worker_main
+
+        if getattr(sys, "frozen", False):
+            from karaoke_easy.gpu import prepare_dlls
+
+            prepare_dlls()  # Motor GPU: cuBLAS/cuDNN de torch para ctranslate2
 
         worker_main(sys.argv[sys.argv.index("--worker") + 1])
         sys.stdout.flush()

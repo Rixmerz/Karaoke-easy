@@ -11,6 +11,7 @@ DEFAULTS = {
     "guide_track": True,       # pista de voz guía dentro del MP4
     "use_source_video": True,  # usar el vídeo original de fondo si existe
     "export_mp4": False,       # crear también el video MP4 (lento; el reproductor de la app no lo necesita)
+    "use_gpu": True,           # usar el Motor GPU (NVIDIA) si está instalado y funciona
     "cookies_browser": "",     # "" | firefox | edge | chrome | brave: sesión del navegador para YouTube
 }
 

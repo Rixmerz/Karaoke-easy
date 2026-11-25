@@ -207,6 +207,10 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None, lic=None):
                     from . import downloads, paths
                     return self._json({"ready": paths.models_ready(), "dir": str(paths.MODELS_DIR),
                                        "download": downloads.MODELS.public()})
+                if parts[:2] == ["api", "gpu"]:
+                    from . import downloads, edition, gpu
+                    return self._json({**gpu.SELECTOR.public(), "download": downloads.GPU.public(),
+                                       "can_download": not edition.is_steam()})  # en Steam es un DLC
                 if parts[:2] == ["api", "update"]:
                     from . import downloads, edition
                     if edition.is_steam():  # Steam entrega las actualizaciones
@@ -332,6 +336,18 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None, lic=None):
                 if not (url.startswith("https://github.com/Rixmerz/Karaoke-easy/") or url.startswith("http://127.0.0.1:")):
                     return self._json({"error": "origen no permitido"}, 400)
                 return self._json({"started": downloads.start_models(url)})
+            if parts == ["api", "gpu", "download"]:
+                from . import downloads, edition
+                if edition.is_steam():
+                    return self._json({"error": "en Steam el Motor GPU se instala como DLC"}, 400)
+                url = self._body().get("url")
+                if url and not (url.startswith(downloads.RELEASES + "/") or url.startswith("http://127.0.0.1:")):
+                    return self._json({"error": "origen no permitido"}, 400)
+                return self._json({"started": downloads.start_gpu(url)})
+            if parts == ["api", "gpu", "recheck"]:
+                from . import gpu
+                gpu.SELECTOR.refresh()
+                return self._json({"ok": True})
             if parts == ["api", "update", "download"]:
                 from . import downloads, edition
                 if edition.is_steam():

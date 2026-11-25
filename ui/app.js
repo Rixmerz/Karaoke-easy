@@ -50,7 +50,7 @@ function go(view) {
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + view));
   document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("on", b.dataset.view === view));
   if (view === "library") loadLibrary();
-  if (view === "settings") { loadSettings(); refreshModels(); refreshLicense(); }
+  if (view === "settings") { loadSettings(); refreshModels(); refreshLicense(); refreshGpu(); }
 }
 document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => go(b.dataset.view));
 document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => go(b.dataset.go));
@@ -497,6 +497,29 @@ $("sModelsBtn").onclick = async () => {
   const t = setInterval(async () => { const ok = await refreshModels(); const st = (await api("models")).download.state;
     if (ok || st === "error") { clearInterval(t); if (ok) toast("Componentes listos. ¡Ya puedes crear karaokes!", "ok"); } }, 1000);
 };
+
+// ---------------- Motor GPU (NVIDIA, opcional) ----------------
+let GPU_POLL = null;
+async function refreshGpu() {
+  let g; try { g = await api("gpu"); } catch (e) { return; }
+  const row = $("gpuRow"), d = g.download || {}, busy = d.state === "running" || d.state === "extracting";
+  row.hidden = !g.nvidia && !g.installed;   // solo se ofrece si hay una tarjeta NVIDIA
+  if (row.hidden) return;
+  $("sUseGpu").checked = g.enabled; $("sUseGpu").disabled = !g.installed;
+  const bar = $("gBar"); bar.style.display = busy ? "block" : "none"; bar.querySelector("i").style.width = Math.round((d.progress || 0) * 100) + "%";
+  const outdated = /otra versión/.test(g.reason || "");
+  $("sGpuBtn").hidden = busy || !g.can_download || !g.driver_ok || (g.installed && !outdated);
+  $("sGpuBtn").lastChild.textContent = outdated ? " Actualizar Motor GPU" : " Descargar Motor GPU (≈3 GB)";
+  let txt = g.using === "gpu" ? `Usando: GPU (${g.device_name || "NVIDIA"})` : `Usando: procesador${g.reason ? " — " + g.reason : ""}`;
+  if (busy) txt = d.state === "running" ? `Descargando Motor GPU… ${Math.round(d.progress * 100)} %` : "Comprobando e instalando el Motor GPU…";
+  else if (d.state === "error") txt = "Error al descargar el Motor GPU: " + d.error;
+  else if (!g.installed && !g.can_download) txt += " (instala el DLC gratuito «Motor GPU» en Steam)";
+  $("sGpu").textContent = txt;
+  if ((busy || g.checking) && !GPU_POLL) GPU_POLL = setInterval(refreshGpu, 1000);
+  if (!busy && !g.checking && GPU_POLL) { clearInterval(GPU_POLL); GPU_POLL = null; if (d.state === "done" && g.using === "gpu") toast("Motor GPU listo", "ok"); }
+}
+$("sGpuBtn").onclick = async () => { const r = await api("gpu/download", {}); if (r.error) toast(r.error, "err"); refreshGpu(); };
+$("sUseGpu").onchange = async () => { await api("settings", { use_gpu: $("sUseGpu").checked }); refreshGpu(); };
 
 // ---------------- primer arranque ----------------
 function onboarding(step = 0) {

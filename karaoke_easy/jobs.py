@@ -57,7 +57,7 @@ def _worker(spec, q):
         opts = Options(input_path=src, output_dir=out_dir, semitones=spec.get("semitones", 0),
                        whisper_model=spec.get("whisper_model", "small"), language=spec.get("language"),
                        use_source_video=spec.get("use_source_video", True), guide_track=spec.get("guide_track", True),
-                       make_video=spec.get("export_mp4", True),
+                       make_video=spec.get("export_mp4", True), device=spec.get("device", "auto"),
                        lyrics_text=spec.get("lyrics") or None, artist_hint=artist, title_hint=title)
         if spec.get("quality") == "720":
             opts.width, opts.height = 1280, 720
@@ -100,6 +100,7 @@ class Job:
         self.finished = None
         self.proc = None
         self.dl = None  # progreso de la descarga (enlaces)
+        self.engine = None  # "gpu" | "cpu": con qué motor se procesa
 
     def fraction(self):
         if self.state == "done":
@@ -133,7 +134,8 @@ class Job:
         return {"id": self.id, "title": self.title, "artist": self.artist, "state": self.state,
                 "step": self.step, "steps": [{"key": k, "name": n} for k, n, _ in STEPS],
                 "fraction": round(self.fraction(), 4), "eta": self.eta(), "error": self.error,
-                "result": self.result, "created": self.created, "log": self.log[-200:], "download": self.dl}
+                "result": self.result, "created": self.created, "log": self.log[-200:], "download": self.dl,
+                "engine": self.engine}
 
 
 class JobManager:
@@ -215,9 +217,33 @@ class JobManager:
                 j.state, j.error = "error", val
 
     def _run(self, j: Job):
+        """Elige motor (GPU si está instalado y pasa la autoprueba; si no, procesador) y procesa.
+        Si falla en la GPU (falta de memoria, driver...), repite la canción con el procesador."""
+        from . import gpu, paths
+        use, why, exe = gpu.SELECTOR.choice()
+        if use:
+            j.engine = "gpu"
+            j.log.append("Usando la tarjeta gráfica (Motor GPU NVIDIA).")
+            self._spawn(j, [str(exe), "--worker"], device="cuda",
+                        env={"KARAOKE_MODELS": str(paths.MODELS_DIR)})  # el pack GPU no trae modelos
+            ok = j.state == "done"
+            if j.state != "cancelled":
+                gpu.SELECTOR.job_result(ok, j.error)
+            if not gpu.should_retry_on_cpu(j.state, j.step, j.state == "cancelled"):
+                return
+            _diag(f"[{j.id}] falló en la GPU ({j.error}); se repite con el procesador")
+            j.log.append(f"Falló en la tarjeta gráfica ({j.error}). Repitiendo con el procesador…")
+            j.state, j.error, j.step, j.sub, j.dl = "queued", None, None, 0.0, None
+        elif why:
+            j.log.append(f"Usando el procesador ({why}).")
+        j.engine = "cpu"
+        self._spawn(j, None, device="auto" if not use else "cpu")
+
+    def _spawn(self, j: Job, base_cmd, device="auto", env=None):
         """Procesa la canción en un proceso aparte: el propio motor con --worker
         (sin multiprocessing: funciona igual con o sin consola, que es como lo lanza la app)."""
         import json
+        import os
         import subprocess
         import sys
         from . import paths
@@ -225,9 +251,11 @@ class JobManager:
         jobs_dir = paths.user_cache() / "trabajos"
         jobs_dir.mkdir(parents=True, exist_ok=True)
         spec_file = jobs_dir / f"{j.id}.json"
-        spec_file.write_text(json.dumps(j.spec, ensure_ascii=False), encoding="utf-8")
+        spec_file.write_text(json.dumps(dict(j.spec, device=device), ensure_ascii=False), encoding="utf-8")
         err_file = jobs_dir / f"{j.id}.err.txt"
-        if getattr(sys, "frozen", False):
+        if base_cmd:
+            cmd = list(base_cmd) + [str(spec_file)]
+        elif getattr(sys, "frozen", False):
             cmd = [sys.executable, "--worker", str(spec_file)]
         else:
             cmd = [sys.executable, str(Path(__file__).resolve().parent.parent / "run.py"), "--worker", str(spec_file)]
@@ -236,6 +264,7 @@ class JobManager:
         flags = 0x08000000 if sys.platform == "win32" else 0  # CREATE_NO_WINDOW
         with open(err_file, "w", encoding="utf-8", errors="replace") as err:
             j.proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=err,
+                                      env=dict(os.environ, **(env or {})),
                                       creationflags=flags, bufsize=1, text=True, encoding="utf-8", errors="replace")
             for line in j.proc.stdout:
                 if not line.startswith(MARK):

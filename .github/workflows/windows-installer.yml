@@ -286,11 +286,100 @@ jobs:
           path: dist-steam/KaraokeEasy-Steam-*.zip
           compression-level: 0
 
+  # Motor GPU (NVIDIA), complemento opcional (docs/gpu.md). Mismo código, torch con CUDA 12.8.
+  # Produce: el pack dividido para la versión directa (KaraokeEasy-GPU-<ver>.zip.001… + .json con
+  # sha256) y la carpeta del depot DLC de Steam (gpu/). No toca los otros jobs.
+  # Sin caché de pip a propósito: el wheel de torch CUDA pesa ~3 GB y desalojaría la caché de modelos.
+  gpu:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    outputs:
+      version: ${{ steps.pack.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Dependencias (torch CUDA 12.8)
+        run: |
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir torch==2.7.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu128
+          pip install --no-cache-dir -r requirements.txt "ctranslate2>=4.5,<5" pyinstaller pytest
+          python -c "import torch, ctranslate2; print('torch', torch.__version__, 'CUDA', torch.version.cuda, 'ct2', ctranslate2.__version__); assert (torch.version.cuda or '').startswith('12.')"
+          # Arquitecturas compiladas en el wheel (get_arch_list() da [] sin GPU): RTX 50 (sm_120) es obligatoria; GTX 10xx (sm_61) se avisa
+          python -c "import torch; a=(torch._C._cuda_getArchFlags() or '').split(); print('arquitecturas:', a); assert 'sm_120' in a; print('::warning::sin sm_61 (GTX 10xx)') if 'sm_61' not in a else None"
+      - name: Pruebas del Motor GPU (sin tarjeta, lógica y pack)
+        run: python -m pytest -q tests/test_gpu.py
+      - name: Motor GPU (PyInstaller)
+        shell: pwsh
+        run: |
+          $env:KARAOKE_GPU = "1"
+          pyinstaller --noconfirm KaraokeEasy.spec
+          $lib = "dist\KaraokeEngine-GPU\_internal\torch\lib"
+          # ctranslate2 (faster-whisper) usa las cuBLAS/cuDNN de torch: deben estar dentro del motor
+          foreach ($d in "cublas64_12.dll", "cublasLt64_12.dll", "cudnn64_9.dll", "torch_cuda.dll") {
+            if (-not (Test-Path "$lib\$d")) { Get-ChildItem $lib | Select-Object Name, Length; throw "falta $d en el Motor GPU" } }
+          if (-not (Get-ChildItem dist\KaraokeEngine-GPU\_internal -Recurse -Filter ctranslate2.dll)) { throw "falta ctranslate2.dll" }
+          if (Test-Path dist\KaraokeEngine-GPU\_internal\models) { throw "el Motor GPU no debe llevar modelos" }
+          "{0:N2} GB sin comprimir" -f ((Get-ChildItem dist\KaraokeEngine-GPU -Recurse | Measure-Object Length -Sum).Sum / 1GB)
+      - name: "Autoprueba en el runner (sin GPU, debe arrancar y responder sin CUDA)"
+        shell: pwsh
+        run: |
+          $out = & dist\KaraokeEngine-GPU\KaraokeEngine-GPU.exe --gpu-selftest
+          $out
+          $line = $out | Where-Object { $_ -like "GPU_SELFTEST *" } | Select-Object -First 1
+          if (-not $line) { throw "el Motor GPU no respondió a --gpu-selftest" }
+          $r = $line.Substring(13) | ConvertFrom-Json
+          if ($r.version -ne (Get-Content VERSION).Trim()) { throw "versión distinta en el Motor GPU" }
+          if ($r.error -match "DLL|ImportError|ModuleNotFound") { throw "el Motor GPU no carga sus librerías: $($r.error)" }
+      - name: Pack dividido (directa) + manifiesto sha256
+        id: pack
+        shell: pwsh
+        run: |
+          $ver = (Get-Content VERSION).Trim()
+          New-Item -ItemType Directory -Force Output-GPU | Out-Null
+          # Un solo .zip cortado en trozos de 1900 MB (límite de 2 GB por archivo en GitHub Releases)
+          Push-Location dist\KaraokeEngine-GPU; 7z a -tzip -mx1 -v1900m "..\..\Output-GPU\KaraokeEasy-GPU-$ver.zip" * | Out-Null; Pop-Location
+          python tools/gpu_manifest.py "$ver" Output-GPU
+          Get-ChildItem Output-GPU | Select-Object Name, Length
+          "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KaraokeEasy-GPU-pack
+          path: Output-GPU/*
+          compression-level: 0
+      - name: Carpeta del depot DLC de Steam (gpu/)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist-steam-gpu | Out-Null
+          Move-Item dist\KaraokeEngine-GPU dist-steam-gpu\gpu   # mover, no copiar: el disco del runner es justo
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KaraokeEasy-Steam-GPU-depot
+          path: dist-steam-gpu
+          compression-level: 1
+
+  # Publica el pack GPU en el mismo Release que el instalador, solo si este se publicó bien.
+  gpu-release:
+    needs: [build, gpu]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: KaraokeEasy-GPU-pack
+          path: gpu-pack
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.gpu.outputs.version }}
+          files: gpu-pack/*
+
   # Subida a Steam (SteamPipe) en la rama "beta", solo si hay credenciales. Corre en Linux
   # (donde game-ci/steam-deploy está probado) con el zip que construyó el job anterior.
+  # Si existe la variable STEAM_GPU_DEPOT_ID y el job gpu salió bien, sube también el depot del
+  # DLC "Motor GPU" en el MISMO build (un build sin ese depot dejaría el DLC vacío en esa rama).
   steam-upload:
-    needs: steam
-    if: needs.steam.outputs.can_upload == 'true'
+    needs: [steam, gpu]
+    if: ${{ !cancelled() && needs.steam.result == 'success' && needs.steam.outputs.can_upload == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -298,6 +387,11 @@ jobs:
           name: KaraokeEasy-Steam
       - name: Descomprimir
         run: mkdir -p build/KaraokeEasy && unzip -q KaraokeEasy-Steam-*.zip -d build/KaraokeEasy
+      - uses: actions/download-artifact@v4
+        if: ${{ vars.STEAM_GPU_DEPOT_ID != '' && needs.gpu.result == 'success' }}
+        with:
+          name: KaraokeEasy-Steam-GPU-depot
+          path: build/GPU   # contiene gpu/: Steam lo instala en <app>\gpu
       - uses: game-ci/steam-deploy@v3.3.0
         with:
           username: ${{ secrets.STEAM_USERNAME }}
@@ -307,4 +401,6 @@ jobs:
           rootPath: build
           depot1Path: KaraokeEasy
           depot1Id: ${{ vars.STEAM_DEPOT_ID }}
+          depot2Path: ${{ (vars.STEAM_GPU_DEPOT_ID != '' && needs.gpu.result == 'success') && 'GPU' || '' }}
+          depot2Id: ${{ (vars.STEAM_GPU_DEPOT_ID != '' && needs.gpu.result == 'success') && vars.STEAM_GPU_DEPOT_ID || '' }}
           releaseBranch: beta
