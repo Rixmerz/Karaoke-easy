@@ -31,6 +31,7 @@
         <button class="btn" id="importBtn" title="Importar canciones (.karaoke)"><i data-icon="upload"></i></button>
         <button class="btn" id="exportBtn" title="Exportar las canciones que estás viendo (.karaoke)"><i data-icon="download"></i></button>
         <button class="btn" id="partyBtn" title="Cantar varias canciones seguidas"><i data-icon="party-popper"></i> Modo fiesta</button>
+        <button class="btn" id="duelBtn" title="Duelo por turnos: 2 a 8 jugadores, ranking al final"><i data-icon="trophy"></i> Duelo</button>
         <button class="btn pri" data-go="new"><i data-icon="plus"></i> Nueva canción</button>
       </div>
       <div class="tabs" id="libTabs"></div>
@@ -159,6 +160,17 @@
   </div>
   <div id="result"><div class="nbox"><div class="sub">Tu puntuación</div><div class="bigscore" id="resScore">0</div><h2 id="resMsg"></h2>
     <div class="row" style="justify-content:center;gap:10px"><button class="btn pri" id="resAgain"><i data-icon="rotate-ccw"></i> Otra vez</button><button class="btn" id="resClose">Cerrar</button></div></div></div>
+  <div id="turn"><div class="nbox">
+    <div class="sub" id="tuInfo"></div><h1 id="tuName"></h1><h2 id="tuSong"></h2>
+    <p class="tumic" id="tuMic"></p><p class="sub" id="tuLast"></p><div class="board" id="tuBoard"></div>
+    <div class="row" style="justify-content:center;gap:10px"><button class="btn pri" id="tuGo"><i data-icon="mic"></i> ¡A cantar!</button>
+      <button class="btn" id="tuQR" hidden><i data-icon="smartphone"></i> Mostrar QR</button>
+      <button class="btn" id="tuSkip"><i data-icon="skip-forward"></i> Saltar turno</button><button class="btn ghost" id="tuEnd">Terminar duelo</button></div>
+  </div></div>
+  <div id="ranking"><div class="nbox">
+    <div class="sub">Resultado del duelo</div><h1 id="rkWinner"></h1><div id="rkList"></div>
+    <div class="row" style="justify-content:center;gap:10px"><button class="btn pri" id="rkAgain"><i data-icon="rotate-ccw"></i> Revancha</button><button class="btn" id="rkClose">Cerrar</button></div>
+  </div></div>
   <div id="nextUp"><div class="nbox">
     <div class="sub">Siguiente canción</div><h1 id="nuTitle"></h1><h2 id="nuArtist"></h2>
     <div class="ring"><span id="nuCount">8</span></div>
@@ -179,6 +191,8 @@
     <div class="prow" style="margin-top:8px">
       <div class="grp" title="Tu micrófono por los parlantes, con eco (usa audífonos para evitar acoples)">
         <button class="pb" id="micBtn"><i data-icon="mic-off" data-size="15"></i> Micrófono</button>
+        <button class="pb" id="phoneBtn" title="Usa tu teléfono como micrófono (por wifi)"><i data-icon="smartphone" data-size="15"></i> Teléfono</button>
+        <select class="pb" id="micSel" hidden title="Qué micrófono se puntúa"></select>
         <label>Vol</label><input id="micVol" type="range" min="0" max="150" value="90" style="width:80px">
         <label title="Más bajo = ignora más ruido de fondo (puntuación)">Sensib.</label><input id="micSens" type="range" min="0" max="100" value="50" style="width:70px" title="Sensibilidad del micrófono para la puntuación: bájala si detecta ruido">
         <label>Eco</label><input id="echo" type="range" min="0" max="100" value="35" style="width:80px"></div>
@@ -194,6 +208,7 @@
 <div id="toasts"></div>
 <script src="icons.js"></script>
 <script src="app.js"></script>
+<script src="duel.js"></script>
 <script src="player.js"></script>
 </body>
 </html>

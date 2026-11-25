@@ -93,7 +93,7 @@ $("abClear").onclick=()=>{A=B=null;drawAB();$("aBtn").classList.remove("on");$("
 async function setFull(on){try{if(T?.window){await T.window.getCurrentWindow().setFullscreen(on)}else if(on)await document.documentElement.requestFullscreen();else if(document.fullscreenElement)await document.exitFullscreen()}catch(e){}}
 let isFull=false;$("fsBtn").onclick=()=>{isFull=!isFull;setFull(isFull)};
 function closePlayer(){if(dirty&&!confirm("Hay cambios de sincronía sin guardar. ¿Salir igualmente?"))return;
-  recStop();micOff();pause();PARTY=null;$("nextUp").classList.remove("on");clearInterval(nuTimer);isFull=false;setFull(false);$("player").classList.remove("on");editMode=false;dirty=false;$("edit").classList.remove("open");$("player").classList.remove("editing");setSide(false);loadLibrary()}
+  recStop();micOff();pause();PARTY=null;DUEL=null;$("turn").classList.remove("on");$("ranking").classList.remove("on");$("nextUp").classList.remove("on");clearInterval(nuTimer);isFull=false;setFull(false);$("player").classList.remove("on");editMode=false;dirty=false;$("edit").classList.remove("open");$("player").classList.remove("editing");setSide(false);loadLibrary()}
 $("back").onclick=closePlayer;
 function setSide(on){$("side").classList.toggle("open",on);$("listBtn").classList.toggle("on",on)}
 $("listBtn").onclick=()=>setSide(!$("side").classList.contains("open"));$("sideClose").onclick=()=>setSide(false);
@@ -187,10 +187,11 @@ requestAnimationFrame(frame);
 
 // ---------- modo fiesta ----------
 let nuTimer=null;
-function updParty(){const on=!!PARTY;$("partyTag").hidden=!on;$("partySkip").hidden=!on||PARTY.i>=PARTY.ids.length-1;
+function updParty(){if(DUEL)return updDuelTag();const on=!!PARTY;$("partyTag").hidden=!on;$("partySkip").hidden=!on||PARTY.i>=PARTY.ids.length-1;
   if(on)$("partyPos").textContent=`Fiesta ${PARTY.i+1}/${PARTY.ids.length}`}
 function onSongEnd(){
   recStop();
+  if(DUEL)return duelTurnEnd();
   if(showResult()&&!PARTY)return;
   if(!PARTY)return;
   if(PARTY.i>=PARTY.ids.length-1){toast("¡Fin del modo fiesta! 🎉","ok",4000);PARTY=null;updParty();return}
@@ -206,7 +207,7 @@ function goNext(skip){clearInterval(nuTimer);$("nextUp").classList.remove("on");
   PARTY.i+=skip?2:1;if(PARTY.i>=PARTY.ids.length){PARTY=null;updParty();return}openSong(PARTY.ids[PARTY.i])}
 $("nuGo").onclick=()=>goNext();$("nuSkip").onclick=()=>goNext(true);
 $("nuEnd").onclick=()=>{clearInterval(nuTimer);$("nextUp").classList.remove("on");PARTY=null;updParty()};
-$("partySkip").onclick=()=>{if(PARTY){pause();PARTY.i++;openSong(PARTY.ids[PARTY.i])}};
+$("partySkip").onclick=()=>{if(DUEL){pause();return duelTurnEnd()}if(PARTY){pause();PARTY.i++;openSong(PARTY.ids[PARTY.i])}};
 
 // ---------- estilo de la letra ----------
 const COLORS=["","#ff4d6d","#ffd23f","#3ddc97","#33c5ff","#b98cff","#ffffff"];
@@ -250,30 +251,109 @@ if(REMOTE){document.body.classList.add("lyrics-only");$("player").classList.add(
   chan&&chan.postMessage({type:"hello"})}
 
 // ---------- micrófono con eco ----------
-let mic=null; // {stream, src, gain, wet, an, buf}
+// Cada entrada (micrófono del PC o un teléfono) tiene su propia cadena: volumen + eco → gMaster,
+// y un analizador para la afinación. `mic` es la entrada que se puntúa ahora.
+let mic=null; // {key, stream?, src, gain, wet, an, buf, floor, hist}
+const MICS={}; // "local" | "p1".."p4" -> cadena
 function impulse(sec=2.2,decay=3){const n=ctx.sampleRate*sec,b=ctx.createBuffer(2,n,ctx.sampleRate);
   for(let c=0;c<2;c++){const d=b.getChannelData(c);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,decay)}return b}
-async function micOn(){
-  setupAudio();if(ctx.state==="suspended")await ctx.resume();
-  const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
-  const src=ctx.createMediaStreamSource(stream),gain=ctx.createGain(),dry=ctx.createGain(),wet=ctx.createGain();
-  const conv=ctx.createConvolver();conv.buffer=impulse();
+let IMPULSE=null;
+function buildChain(key,src){
+  const gain=ctx.createGain(),dry=ctx.createGain(),wet=ctx.createGain();
+  const conv=ctx.createConvolver();conv.buffer=IMPULSE||(IMPULSE=impulse());
   const delay=ctx.createDelay(1),fb=ctx.createGain();delay.delayTime.value=0.13;fb.gain.value=0.28;
   src.connect(gain);gain.connect(dry).connect(gMaster);
   gain.connect(conv).connect(wet);gain.connect(delay);delay.connect(fb).connect(delay);delay.connect(wet);wet.connect(gMaster);
   const hp=ctx.createBiquadFilter();hp.type="highpass";hp.frequency.value=90;const lp=ctx.createBiquadFilter();lp.type="lowpass";lp.frequency.value=1500;
   const an=ctx.createAnalyser();an.fftSize=2048;src.connect(hp).connect(lp).connect(an);
-  mic={stream,src,gain,wet,an,buf:new Float32Array(2048),floor:0.004,hist:[]};applyMic();
-  $("micBtn").classList.add("on");$("micBtn").innerHTML=icon("mic",15)+" Micrófono";
+  const ch={key,src,gain,wet,an,buf:new Float32Array(2048),floor:0.004,hist:[]};MICS[key]=ch;
+  if(recDest){gain.connect(recDest);ch.recConnected=true}
+  applyMic();return ch}
+function dropChain(key){const ch=MICS[key];if(!ch)return;try{ch.src.disconnect();ch.gain.disconnect();ch.wet.disconnect()}catch(e){}delete MICS[key];
+  if(mic===ch){mic=MICS.local||Object.values(MICS)[0]||null}updMicUI()}
+function useMic(key){if(MICS[key]){mic=MICS[key];mic.hist=[];updMicUI();return true}return false}
+function micLabel(key){if(key==="local")return "Micrófono del PC";const p=PH.phones.find(x=>"p"+x.slot===key);return p?p.name:"Teléfono "+key.slice(1)}
+function updMicUI(){const on=!!MICS.local;$("micBtn").classList.toggle("on",on);$("micBtn").innerHTML=icon(on?"mic":"mic-off",15)+" Micrófono";
+  const n=PH.phones.length;$("phoneBtn").classList.toggle("on",PH.active);$("phoneBtn").innerHTML=icon("smartphone",15)+" Teléfono"+(n?` (${n})`:"");
+  const sel=$("micSel");if(sel){const keys=Object.keys(MICS);sel.hidden=keys.length<2;
+    sel.innerHTML=keys.map(k=>`<option value="${k}" ${mic&&mic.key===k?"selected":""}>${esc(micLabel(k))}</option>`).join("")}}
+async function micOn(){
+  setupAudio();if(ctx.state==="suspended")await ctx.resume();
+  if(MICS.local){mic=MICS.local;return}
+  const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+  const ch=buildChain("local",ctx.createMediaStreamSource(stream));ch.stream=stream;
+  if(!mic||mic.key==="local"||!DUEL)mic=ch;updMicUI();
   toast("Micrófono activo. Usa audífonos para evitar acoples.","ok",3500);
 }
-function micOff(){if(!mic)return;mic.stream.getTracks().forEach(t=>t.stop());try{mic.src.disconnect();mic.gain.disconnect()}catch(e){}mic=null;
-  $("micBtn").classList.remove("on");$("micBtn").innerHTML=icon("mic-off",15)+" Micrófono"}
-function applyMic(){if(!mic)return;mic.gain.gain.value=+$("micVol").value/100;mic.wet.gain.value=+$("echo").value/100*0.9;
+function micOff(){const ch=MICS.local;if(!ch)return;ch.stream.getTracks().forEach(t=>t.stop());dropChain("local")}
+function applyMic(){for(const ch of Object.values(MICS)){ch.gain.gain.value=+$("micVol").value/100;ch.wet.gain.value=+$("echo").value/100*0.9}
   try{localStorage.setItem("ke_mic",JSON.stringify({vol:$("micVol").value,echo:$("echo").value,sens:$("micSens").value}))}catch(e){}}
 try{const m=JSON.parse(localStorage.getItem("ke_mic")||"{}");if(m.vol)$("micVol").value=m.vol;if(m.echo)$("echo").value=m.echo;if(m.sens)$("micSens").value=m.sens}catch(e){}
 $("micVol").oninput=applyMic;$("micSens").oninput=applyMic;$("echo").oninput=applyMic;
-$("micBtn").onclick=async()=>{if(mic)return micOff();try{await micOn()}catch(e){toast("No se pudo usar el micrófono: "+(e.message||e),"err",5000)}};
+$("micBtn").onclick=async()=>{if(MICS.local)return micOff();try{await micOn()}catch(e){toast("No se pudo usar el micrófono: "+(e.message||e),"err",5000)}};
+$("micSel").onchange=e=>useMic(e.target.value);
+
+// ---------- teléfono como micrófono ----------
+// El motor abre un servidor HTTPS en la red local solo mientras esto está activo. Los teléfonos
+// envían PCM 16 bits a 24 kHz; aquí llega por un WebSocket local y un AudioWorklet lo reproduce
+// con un pequeño colchón contra el jitter del wifi (40 ms, máximo 150 ms).
+const PH={active:false,ws:null,phones:[],info:null,nodes:{},stats:{frames:0,delay:null,buf:{}},workletReady:null};
+const PLAY_WORKLET=`class Ph extends AudioWorkletProcessor{
+  constructor(){super();this.N=sampleRate*2|0;this.q=new Float32Array(this.N);this.w=0;this.r=0;this.primed=false;
+    this.ratio=24000/sampleRate;this.pos=0;this.prev=0;this.target=sampleRate*0.04|0;this.max=sampleRate*0.15|0;this.k=0;
+    this.port.onmessage=e=>{const s=new Int16Array(e.data);let p=this.pos;const L=s.length;
+      // remuestreo lineal 24 kHz -> frecuencia del PC
+      while(p<L){const i=Math.floor(p),f=p-i,a=i===0?this.prev:s[i-1]/32768,b=s[i]/32768;this.q[this.w%this.N]=a+(b-a)*f;this.w++;p+=this.ratio}
+      this.pos=p-L;this.prev=s[L-1]/32768;
+      if(this.w-this.r>this.max)this.r=this.w-this.target}} // demasiado atraso: saltar al colchón objetivo
+  process(_,outputs){const o=outputs[0][0];const have=this.w-this.r;
+    if(!this.primed){if(have>=this.target)this.primed=true;else{o.fill(0);return true}}
+    for(let i=0;i<o.length;i++){if(this.r<this.w){o[i]=this.q[this.r%this.N];this.r++}else{o[i]=0;this.primed=false}}
+    if(++this.k%50===0)this.port.postMessage(have/sampleRate*1000);return true}}
+registerProcessor("ke-phone",Ph);`;
+function phoneWorklet(){setupAudio();return PH.workletReady||(PH.workletReady=ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([PLAY_WORKLET],{type:"text/javascript"}))))}
+async function phoneSync(phones){
+  PH.phones=phones||[];await phoneWorklet();
+  const want=new Set(PH.phones.map(p=>"p"+p.slot));
+  for(const k of Object.keys(PH.nodes))if(!want.has(k)){try{PH.nodes[k].disconnect()}catch(e){}delete PH.nodes[k];dropChain(k)}
+  for(const p of PH.phones){const k="p"+p.slot;if(PH.nodes[k])continue;
+    const node=new AudioWorkletNode(ctx,"ke-phone",{numberOfInputs:0,outputChannelCount:[1]});node.port.onmessage=e=>PH.stats.buf[k]=e.data;
+    PH.nodes[k]=node;buildChain(k,node);
+    if(!mic||(!DUEL&&mic.key==="local"&&!MICS.local))mic=MICS[k];
+    toast(`📱 ${p.name} conectado como micrófono`,"ok",3000)}
+  updMicUI();renderPhoneList();
+}
+function phoneSocket(){
+  if(PH.ws)return;const ws=new WebSocket(API.base.replace(/^http/,"ws")+"api/phonemic/ws?t="+encodeURIComponent(API.token));
+  ws.binaryType="arraybuffer";PH.ws=ws;
+  ws.onmessage=e=>{
+    if(typeof e.data==="string"){const m=JSON.parse(e.data);if(m.type==="status"){PH.active=m.active;phoneSync(m.phones)}return}
+    const b=e.data,slot=new Uint8Array(b,0,1)[0],node=PH.nodes["p"+slot];
+    PH.stats.frames++;PH.stats.delay=Date.now()-new DataView(b,8,8).getFloat64(0,true); // solo es exacto si ambos relojes coinciden
+    if(node){const pcm=b.slice(16);node.port.postMessage(pcm,[pcm])}};
+  ws.onclose=()=>{PH.ws=null;if(PH.active)setTimeout(phoneSocket,1000)};
+}
+async function phoneStart(){
+  setupAudio();if(ctx.state==="suspended")await ctx.resume();
+  loading(true,"Preparando la conexión segura para el teléfono… (solo la primera vez tarda unos segundos)");
+  try{PH.info=await api("phonemic/start",{});PH.active=true}catch(e){toast("No se pudo activar el teléfono: "+e.message,"err",6000);return false}finally{loading(false)}
+  await phoneWorklet();phoneSocket();return true}
+async function phoneStop(){try{await api("phonemic/stop",{})}catch(e){}PH.active=false;PH.info=null;try{PH.ws&&PH.ws.close()}catch(e){}PH.ws=null;await phoneSync([]);updMicUI()}
+function renderPhoneList(){const el=$("phList");if(!el)return;
+  el.innerHTML=PH.phones.length?PH.phones.map(p=>`<div class="phrow">${icon("smartphone",16)} <b>${esc(p.name)}</b><span class="sub">micrófono ${p.slot}</span>${mic&&mic.key==="p"+p.slot?'<span class="tagok">puntúa</span>':`<button class="btn sm" data-use="p${p.slot}">Puntuar con este</button>`}</div>`).join("")
+    :`<p class="sub">Esperando teléfonos… (hasta 4, para duetos)</p>`;
+  el.querySelectorAll("[data-use]").forEach(b=>b.onclick=()=>{useMic(b.dataset.use);renderPhoneList()})}
+async function phoneDialog(){
+  if(!PH.active&&!(await phoneStart()))return;const i=PH.info;
+  modal("Micrófono del teléfono",`<div class="phqr"><div class="qr">${i.qr}</div><div>
+      <ol class="phsteps"><li>Conecta el teléfono al <b>mismo wifi</b> que este PC.</li><li>Escanea el código con la cámara.</li>
+      <li>La primera vez el navegador avisa que la conexión “no es privada”: toca <b>Configuración avanzada → Continuar</b> (en iPhone: <b>Mostrar detalles → visitar este sitio web</b>). Es tu propio PC.</li>
+      <li>Toca <b>Empezar</b> y permite el micrófono.</li></ol>
+      <p class="sub">O escribe: <code>${esc(i.url)}</code><br>Código de emparejamiento: <b class="code">${esc(i.code)}</b> · huella del certificado ${esc(i.fingerprint||"")}</p></div></div>
+    <div id="phList"></div>`,[{label:"Apagar teléfono",onclick:phoneStop},{label:"Listo",primary:true}]);
+  renderPhoneList()}
+$("phoneBtn").onclick=()=>phoneDialog();
+window.KE_PHONE_STATS=()=>({active:PH.active,phones:PH.phones.length,frames:PH.stats.frames,delay:PH.stats.delay,buf:PH.stats.buf,mic:mic&&mic.key});
 
 // ---------- detección de tono y puntuación ----------
 let view={mid:62,range:16,init:false},REF=null,scoring=false,score={hit:0,tot:0},trail=[];
@@ -295,17 +375,18 @@ function detectPitch(){ // autocorrelación: devuelve nota MIDI (float) o null
 function refAt(t){if(!REF)return null;const i=Math.round(t/REF.hop);const v=REF.midi[i];return v==null?null:v+pitch}
 async function loadRef(){REF=null;try{REF=await api("pitchref?id="+song.id)}catch(e){}}
 function resetScore(){score={hit:0,tot:0};trail=[];view.init=false;$("scoreV").textContent="0"}
-$("scoreBtn").onclick=async()=>{
-  scoring=!scoring;$("player").classList.toggle("scoring",scoring);$("scoreBtn").classList.toggle("on",scoring);
+async function setScoring(on){
+  scoring=on;$("player").classList.toggle("scoring",scoring);$("scoreBtn").classList.toggle("on",scoring);
   if(scoring){if(!REF){loading(true,"Preparando la línea de notas…");await loadRef();loading(false)}resetScore();
     if(!mic){try{await micOn()}catch(e){toast("Activa el micrófono para puntuar","err")}}}
-};
+}
+$("scoreBtn").onclick=()=>setScoring(!scoring);
 function scoreFrame(t){
   if(!scoring||!isPlaying())return;
   const sung=detectPitch(),ref=refAt(t);
   if(sung!=null)trail.push([t,sung]);while(trail.length&&trail[0][0]<t-4)trail.shift();
-  // el micrófono llega con retraso (~50-250 ms): comparar con la referencia reciente más parecida
-  if(ref!=null){score.tot++;if(sung!=null){let best=99;for(let dt=0;dt<=0.25;dt+=0.05){const r=refAt(t-dt);if(r!=null){const d=Math.abs(((sung-r)%12+18)%12-6);if(d<best)best=d}}if(best<=1)score.hit++}}
+  // el micrófono llega con retraso (~50-250 ms; el teléfono suma ~100 ms): comparar con la referencia reciente más parecida
+  if(ref!=null){score.tot++;if(sung!=null){let best=99;for(let dt=0,lag=mic.key==="local"?0.25:0.4;dt<=lag;dt+=0.05){const r=refAt(t-dt);if(r!=null){const d=Math.abs(((sung-r)%12+18)%12-6);if(d<best)best=d}}if(best<=1)score.hit++}}
   const pct=score.tot?Math.round(score.hit/score.tot*100):0;$("scoreV").textContent=pct;
   $("scoreHint").textContent=sung!=null&&ref!=null?(()=>{const d=((sung-ref)%12+18)%12-6;return Math.abs(d)<=1?"¡afinado!":d>0?"un poco alto":"un poco bajo"})():"";
   drawNotes(t,sung);
@@ -343,7 +424,7 @@ let rec=null,recDest=null,recT0=0,recTimer=null;
 function ensureRecDest(){if(recDest)return recDest;setupAudio();recDest=ctx.createMediaStreamDestination();gMaster.connect(recDest);return recDest}
 async function recStart(){
   ensureRecDest();if(!mic){try{await micOn()}catch(e){toast("Se grabará solo la pista (sin micrófono)","",3500)}}
-  if(mic&&!mic.recConnected){mic.gain.connect(recDest);mic.recConnected=true}
+  for(const ch of Object.values(MICS))if(!ch.recConnected){ch.gain.connect(recDest);ch.recConnected=true}
   const mime=MediaRecorder.isTypeSupported("audio/webm;codecs=opus")?"audio/webm;codecs=opus":"";
   const chunks=[];rec=new MediaRecorder(recDest.stream,mime?{mimeType:mime,audioBitsPerSecond:192000}:{});
   rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
@@ -359,3 +440,88 @@ async function recStart(){
 }
 function recStop(){if(rec&&rec.state!=="inactive")rec.stop()}
 $("recBtn").onclick=()=>rec&&rec.state==="recording"?recStop():recStart();
+
+
+// ---------- duelo por turnos ----------
+let DUEL=null; // {cfg, players:[{name,mic}], turns:[{round,player,song}], i, scores:[[pct...]...], last}
+const MIC_OPTS=[["local","Micrófono del PC"],["p1","Teléfono 1"],["p2","Teléfono 2"],["p3","Teléfono 3"],["p4","Teléfono 4"]];
+function duelSetup(prev){
+  if(typeof licAllows==="function"&&!licAllows("party"))return licenseBlocked("El duelo es parte del modo fiesta.");
+  const pool=(typeof tabSongs==="function"?tabSongs(TAB):LIB);const songs=pool.length?pool:LIB;
+  if(!songs.length)return toast("Primero añade canciones a la biblioteca","err");
+  const cfg=prev||{players:[{name:"Jugador 1",mic:"local"},{name:"Jugador 2",mic:"local"}],mode:"same",rounds:1,first:songs[0].id};
+  const row=(p,i)=>`<div class="drow"><input class="field" maxlength="24" value="${esc(p.name)}" placeholder="Nombre">
+    <select class="field">${MIC_OPTS.map(([v,n])=>`<option value="${v}" ${p.mic===v?"selected":""}>${n}</option>`).join("")}</select>
+    <button class="btn sm ghost" data-rm="${i}" title="Quitar">${icon("x",14)}</button></div>`;
+  modal("Duelo por turnos",`<p class="sub">Cada jugador canta su turno y se suma su puntuación de afinación. Al final, el ranking.</p>
+    <label>Jugadores (2 a 8)</label><div id="dPlayers"></div>
+    <button class="btn sm" id="dAdd" style="margin-top:8px">${icon("plus",14)} Añadir jugador</button>
+    <label>Canciones <span class="sub">(${songs.length} en ${pool.length?"lo que estás viendo":"la biblioteca"})</span></label>
+    <div class="radio"><label class="opt"><input type="radio" name="dm" value="same" ${cfg.mode==="same"?"checked":""}><span class="dot"></span><span class="n">Todos cantan la misma canción</span><span class="c">más justo</span></label>
+      <label class="opt"><input type="radio" name="dm" value="each" ${cfg.mode==="each"?"checked":""}><span class="dot"></span><span class="n">Una canción distinta por jugador</span><span class="c">al azar</span></label></div>
+    <label>Primera canción</label><select class="field" id="dFirst">${songs.map(s=>`<option value="${s.id}" ${s.id===cfg.first?"selected":""}>${esc(s.title||"(sin título)")}${s.artist?" — "+esc(s.artist):""}</option>`).join("")}</select>
+    <label>Rondas</label><select class="field" id="dRounds">${[1,2,3,4,5].map(n=>`<option ${n===cfg.rounds?"selected":""}>${n}</option>`).join("")}</select>
+    <p class="sub" style="margin-top:12px">${icon("smartphone",14)} Para cantar con el teléfono, el jugador lo elige en su fila; el código QR aparece en su turno.</p>`,[
+    {label:"Cancelar"},
+    {label:`${icon("trophy",15)} Empezar duelo`,primary:true,onclick:()=>{const c=read();if(c.players.length<2){toast("Se necesitan al menos 2 jugadores","err");return false}duelStart(c,songs.map(s=>s.id))}}]);
+  let players=cfg.players.map(p=>({...p}));
+  const read=()=>{syncRows();return {players:players.map((p,i)=>({name:p.name.trim()||`Jugador ${i+1}`,mic:p.mic})),
+    mode:document.querySelector("input[name=dm]:checked").value,rounds:+$("dRounds").value,first:$("dFirst").value}};
+  const syncRows=()=>$("dPlayers").querySelectorAll(".drow").forEach((r,i)=>{players[i].name=r.querySelector("input").value;players[i].mic=r.querySelector("select").value});
+  const draw=()=>{$("dPlayers").innerHTML=players.map(row).join("");$("dAdd").disabled=players.length>=8;
+    $("dPlayers").querySelectorAll("[data-rm]").forEach(b=>{b.disabled=players.length<=2;b.onclick=()=>{syncRows();players.splice(+b.dataset.rm,1);draw()}})};
+  $("dAdd").onclick=()=>{syncRows();if(players.length<8)players.push({name:`Jugador ${players.length+1}`,mic:"local"});draw()};
+  draw();
+}
+function duelStart(cfg,pool){
+  DUEL={cfg,pool,players:cfg.players,turns:DuelLogic.makeTurns(cfg.players,pool,cfg.mode,cfg.rounds,cfg.first),i:0,scores:cfg.players.map(()=>[]),last:null};
+  PARTY=null;$("ranking").classList.remove("on");duelTurn();
+}
+function updDuelTag(){const on=!!DUEL;$("partyTag").hidden=!on;$("partySkip").hidden=!on;
+  if(on){const t=DUEL.turns[DUEL.i];$("partyPos").textContent=`Duelo · ${DUEL.players[t.player].name} · ${DUEL.i+1}/${DUEL.turns.length}`;$("partySkip").title="Terminar este turno"}
+  else $("partySkip").title="Siguiente canción"}
+async function duelTurn(){
+  const t=DUEL.turns[DUEL.i],p=DUEL.players[t.player];
+  if(!song||song.id!==t.song||!$("player").classList.contains("on"))await openSong(t.song);else{pause();seekTo(0)}
+  if(!DUEL)return;
+  if(!scoring)await setScoring(true);else if(!REF)await loadRef();
+  if(p.mic!=="local"&&!PH.active)await phoneStart();
+  updDuelTag();showTurn();
+}
+function showTurn(){
+  const t=DUEL.turns[DUEL.i],p=DUEL.players[t.player],s=LIB.find(x=>x.id===t.song)||song||{},rounds=DUEL.cfg.rounds;
+  $("tuInfo").textContent=(rounds>1?`Ronda ${t.round+1} de ${rounds} · `:"")+`Turno ${DUEL.i+1} de ${DUEL.turns.length}`;
+  $("tuName").textContent="Turno de "+p.name;$("tuSong").textContent=(s.title||"")+(s.artist?" — "+s.artist:"");
+  $("tuLast").textContent=DUEL.last?`${DUEL.last.name}: ${DUEL.last.pct} puntos`:"";
+  const ph=p.mic!=="local",ok=!ph||!!MICS[p.mic];
+  $("tuMic").innerHTML=icon(ph?"smartphone":"mic",15)+" "+(ph?(ok?esc(micLabel(p.mic)):`${esc(micLabel(p.mic))} no está conectado — se usará el del PC si no lo conectas`):"Micrófono del PC");
+  $("tuMic").classList.toggle("warn",!ok);$("tuQR").hidden=!ph;
+  $("tuBoard").innerHTML=DuelLogic.ranking(DUEL.players,DUEL.scores).filter(r=>r.turns).map(r=>`<span>${esc(r.name)} <b>${r.avg}</b></span>`).join("");
+  $("turn").classList.add("on");
+}
+async function duelGo(){
+  const p=DUEL.players[DUEL.turns[DUEL.i].player];
+  if(p.mic==="local"||!MICS[p.mic]){try{await micOn();useMic("local")}catch(e){toast("No se pudo usar el micrófono: "+(e.message||e),"err",5000)}}
+  else useMic(p.mic);
+  $("turn").classList.remove("on");resetScore();seekTo(0);await play();
+}
+function duelTurnEnd(){
+  if(!DUEL)return;pause();const t=DUEL.turns[DUEL.i],p=DUEL.players[t.player];
+  const pct=score.tot?Math.round(score.hit/score.tot*100):0;DUEL.scores[t.player].push(pct);DUEL.last={name:p.name,pct};
+  DUEL.i++;if(DUEL.i>=DUEL.turns.length)return showRanking();
+  duelTurn();
+}
+function showRanking(){
+  const rows=DuelLogic.ranking(DUEL.players,DUEL.scores),medal=["🥇","🥈","🥉"];
+  const tie=rows.length>1&&rows[1].place===1;
+  $("rkWinner").textContent=tie?"¡Empate!":`¡Gana ${rows[0].name}!`;
+  $("rkList").innerHTML=rows.map(r=>`<div class="rk${r.place===1?" win":""}"><span class="pl">${medal[r.place-1]||r.place+"º"}</span><span class="nm">${esc(r.name)}</span><span class="pts"><b>${r.avg}</b> pts</span><span class="sub">mejor ${r.best}</span></div>`).join("");
+  $("turn").classList.remove("on");$("ranking").classList.add("on");
+}
+$("tuGo").onclick=()=>duelGo();
+$("tuSkip").onclick=()=>{if(!DUEL)return;resetScore();duelTurnEnd()};
+$("tuQR").onclick=async()=>{await phoneDialog();const close=$("mBtns").lastElementChild;if(close){const f=close.onclick;close.onclick=async()=>{await f();if(DUEL&&$("turn").classList.contains("on"))showTurn()}}};
+$("tuEnd").onclick=()=>{$("turn").classList.remove("on");if(DUEL&&DUEL.scores.some(s=>s.length))showRanking();else{DUEL=null;updParty()}};
+$("rkAgain").onclick=()=>{const d=DUEL;$("ranking").classList.remove("on");duelStart(d.cfg,d.pool)};
+$("rkClose").onclick=()=>{$("ranking").classList.remove("on");DUEL=null;updParty()};
+$("duelBtn").onclick=()=>duelSetup();
