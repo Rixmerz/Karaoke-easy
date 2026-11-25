@@ -84,3 +84,16 @@
 **Orden:**
 - (a) Repo de descargas antes de privatizar.
 - (b) Telemetría y API cuando haya los primeros usuarios en prueba: sin usuarios no hay nada que medir.
+
+## 2026-11-25 · Steam: versión para fiestas y jugadores
+**Decisión:** se prepara una versión para Steam dirigida a fiestas en casa y jugadores, en paralelo con la de profesores.
+**Modelo:** el usuario procesa sus propias canciones en su PC. Nosotros no distribuimos ninguna.
+**Condiciones:**
+- En la versión de Steam no hay descarga desde YouTube: solo se arrastran archivos propios.
+- Pago único. Hipótesis: USD 15–20.
+- Términos de uso: el usuario es responsable de los derechos de su música.
+**Validación:**
+- Ficha "Próximamente" en Steam (USD 100) con capturas y un video del modo fiesta.
+- Meta: **5.000 deseados en 8 semanas**. Si se cumple, Steam pasa a ser el canal principal.
+**Pendiente:** confirmar que Valve acepta programas que separan la voz; crear la cuenta de Steamworks (dueño).
+**Antes del lanzamiento:** aceleración por GPU, teléfono como micrófono, varios jugadores por turnos, puntuaciones para compartir.
