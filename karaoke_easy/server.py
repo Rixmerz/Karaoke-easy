@@ -180,6 +180,11 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None, lic=None):
             if parts and parts[0] in ("api", "media") and not self._authorized(q):
                 return self.send_error(401)
             try:
+                if parts[:2] == ["api", "phonemic"]:
+                    from . import phonemic
+                    if parts[2:] == ["ws"]:
+                        return phonemic.serve_local_ws(self)
+                    return self._json(phonemic.HUB.info())
                 if parts[:2] == ["api", "jobs"] and jobs is not None:
                     return self._json(jobs.list())
                 if parts[:2] == ["api", "license"]:
@@ -299,6 +304,16 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None, lic=None):
                         return self._json(L().status())
                 except license.LicenseError as e:
                     return self._json({"error": str(e)}, 400)
+            if parts[:2] == ["api", "phonemic"] and len(parts) == 3:
+                from . import phonemic
+                if parts[2] == "start":
+                    try:
+                        return self._json(phonemic.HUB.start())
+                    except OSError as e:
+                        return self._json({"error": f"No se pudo abrir la red local: {e}"}, 500)
+                if parts[2] == "stop":
+                    phonemic.HUB.stop()
+                    return self._json(phonemic.HUB.info())
             if parts == ["api", "settings"]:
                 from . import settings
                 return self._json(settings.save(self._body()))

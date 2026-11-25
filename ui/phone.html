@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07070c">
+<title>Karaoke Easy — Micrófono</title>
+<style>
+:root{--bg:#07070c;--panel:#14141f;--panel2:#1d1d2c;--line:#ffffff1a;--txt:#f2f2f7;--mut:#a3a3b8;--acc:#ff4d6d;--ok:#3ddc97}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px 16px;text-align:center}
+h1{margin:0;font-size:24px}.sub{color:var(--mut);margin:0;max-width:340px}
+.field{width:min(320px,100%);background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:12px;padding:12px 14px;font-size:17px;text-align:center}
+.btn{border:0;border-radius:999px;font-weight:800;font-size:20px;white-space:pre-line;color:#fff;background:linear-gradient(135deg,var(--acc),#ff7a59);box-shadow:0 8px 24px #ff4d6d50;width:190px;height:190px;cursor:pointer}
+.btn.on{background:linear-gradient(135deg,#22b07d,var(--ok));box-shadow:0 8px 24px #3ddc9750}
+.meter{width:min(320px,100%);height:12px;border-radius:6px;background:var(--panel2);overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ok),#ffd23f,var(--acc));transition:width .06s}
+#st{font-weight:700}#st.err{color:var(--acc)}#st.ok{color:var(--ok)}
+small{color:var(--mut)}
+</style>
+</head>
+<body>
+<main>
+  <h1>🎤 Micrófono del karaoke</h1>
+  <p class="sub">Tu voz sale por los parlantes del PC. Mantén esta pantalla abierta mientras cantas.</p>
+  <input class="field" id="name" maxlength="24" placeholder="Tu nombre (opcional)">
+  <button class="btn" id="go">Empezar</button>
+  <div class="meter"><i id="lvl"></i></div>
+  <div id="st">Listo para conectar</div>
+  <small id="info"></small>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const code=new URLSearchParams(location.search).get("c")||"";
+const RATE=24000,CHUNK=480; // 20 ms por paquete
+let ws=null,ctx=null,stream=null,node=null,running=false,wake=null,rtt=null,sent=0,retry=0;
+try{$("name").value=localStorage.getItem("ke_phone_name")||""}catch(e){}
+function st(t,k=""){$("st").textContent=t;$("st").className=k}
+
+const WORKLET=`class Cap extends AudioWorkletProcessor{
+  constructor(o){super();this.ratio=sampleRate/${RATE};this.pos=0;this.prev=0;this.out=new Int16Array(${CHUNK});this.n=0;this.peak=0}
+  process(inputs){const ch=inputs[0]&&inputs[0][0];if(!ch)return true;
+    // remuestreo lineal a ${RATE} Hz
+    let p=this.pos;const L=ch.length;
+    while(p<L){const i=Math.floor(p),f=p-i,a=i===0?this.prev:ch[i-1],b=ch[i];
+      // p cuenta desde la muestra anterior al bloque (índice -1 = this.prev)
+      const v=a+(b-a)*f;const s=Math.max(-1,Math.min(1,v));if(Math.abs(s)>this.peak)this.peak=Math.abs(s);
+      this.out[this.n++]=s*32767;if(this.n===${CHUNK}){this.port.postMessage({pcm:this.out.buffer,peak:this.peak},[this.out.buffer]);this.out=new Int16Array(${CHUNK});this.n=0;this.peak=0}
+      p+=this.ratio}
+    this.pos=p-L;this.prev=ch[L-1];return true}}
+registerProcessor("cap",Cap);`;
+
+async function start(){
+  const name=$("name").value.trim();try{localStorage.setItem("ke_phone_name",name)}catch(e){}
+  if(!window.isSecureContext||!navigator.mediaDevices){st("Este navegador no permite el micrófono aquí. Abre el enlace en Chrome o Safari.","err");return}
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:1}})}
+  catch(e){st("No se pudo usar el micrófono: "+(e.message||e.name),"err");return}
+  ctx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:"interactive"});
+  await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET],{type:"text/javascript"})));
+  node=new AudioWorkletNode(ctx,"cap");
+  const src=ctx.createMediaStreamSource(stream);src.connect(node);
+  const mute=ctx.createGain();mute.gain.value=0;node.connect(mute).connect(ctx.destination); // mantiene vivo el procesador
+  node.port.onmessage=e=>{const {pcm,peak}=e.data;$("lvl").style.width=Math.min(100,peak*140)+"%";
+    if(!ws||ws.readyState!==1||ws.bufferedAmount>32000)return; // red lenta: descartar en vez de acumular retraso
+    const b=new ArrayBuffer(8+pcm.byteLength);new DataView(b).setFloat64(0,Date.now(),true);new Uint8Array(b,8).set(new Uint8Array(pcm));ws.send(b);sent++};
+  if(ctx.state==="suspended")await ctx.resume();
+  running=true;$("go").classList.add("on");$("go").textContent="Cantando…\nToca para parar";
+  try{wake=await navigator.wakeLock?.request("screen")}catch(e){}
+  connect(name);
+}
+function connect(name){
+  const u=`wss://${location.host}/ws?c=${encodeURIComponent(code)}&n=${encodeURIComponent(name)}`;
+  ws=new WebSocket(u);ws.binaryType="arraybuffer";st("Conectando con el PC…");
+  ws.onmessage=e=>{if(typeof e.data!=="string")return;let m;try{m=JSON.parse(e.data)}catch(x){return}
+    if(m.type==="hello"){retry=0;st(`Conectado como micrófono ${m.slot}`,"ok")}
+    if(m.type==="full")st("Ya hay demasiados teléfonos conectados","err");
+    if(m.type==="ping"){rtt=Date.now()-m.t;$("info").textContent=`Red: ${rtt} ms ida y vuelta`}};
+  ws.onclose=()=>{if(!running)return;st("Se perdió la conexión. Reintentando…","err");
+    setTimeout(()=>running&&connect(name),Math.min(5000,500*(++retry)))};
+}
+setInterval(()=>{if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:"ping",t:Date.now()}))},2000);
+function stop(){running=false;try{ws&&ws.close()}catch(e){}stream&&stream.getTracks().forEach(t=>t.stop());ctx&&ctx.close();
+  ws=ctx=stream=node=null;try{wake&&wake.release()}catch(e){}$("go").classList.remove("on");$("go").textContent="Empezar";$("lvl").style.width="0";st("Detenido")}
+$("go").onclick=()=>running?stop():start();
+document.addEventListener("visibilitychange",async()=>{if(running&&document.visibilityState==="visible"){try{wake=await navigator.wakeLock?.request("screen")}catch(e){}ctx&&ctx.resume()}});
+window.KE_STATS=()=>({sent,rtt,ready:ws&&ws.readyState});
+</script>
+</body>
+</html>

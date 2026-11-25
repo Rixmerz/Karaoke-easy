@@ -267,3 +267,29 @@ body.lyrics-only #player{cursor:none}
 .licbadge{margin:6px 4px 0;padding:5px 10px;border-radius:20px;border:1px solid var(--line);background:transparent;color:var(--mut);font-size:12px;cursor:pointer;align-self:flex-start}
 .licbadge:hover{color:var(--acc);border-color:var(--acc)}
 @media (max-width:820px){.licbadge{display:none}}
+
+/* ---------- teléfono como micrófono ---------- */
+#micSel{max-width:170px}#micSel option{color:#000}
+.modal .box:has(.phqr){width:min(680px,100%)}
+.phqr{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+.phqr .qr{flex:none;width:200px;height:200px;border-radius:12px;overflow:hidden;background:#fff}.phqr .qr svg{width:100%;height:100%;display:block}
+.phqr>div:last-child{flex:1;min-width:220px}
+.phsteps{margin:0;padding-left:20px;font-size:14px;line-height:1.45}.phsteps li{margin-bottom:6px}
+.phqr code{font-size:12px;word-break:break-all;background:var(--panel2);padding:2px 6px;border-radius:6px}
+.code{letter-spacing:2px;font-size:16px}
+#phList{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.phrow{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:12px;background:#ffffff0d;border:1px solid var(--line)}
+.phrow .sub{margin:0;flex:1}.tagok{font-size:12px;font-weight:700;color:var(--ok)}
+
+/* ---------- duelo por turnos ---------- */
+.drow{display:grid;grid-template-columns:1fr 170px auto;gap:8px;margin-bottom:8px}
+#turn,#ranking{position:absolute;inset:0;z-index:32;display:none;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,#2a1240ee,#07070cf5)}
+#ranking{background:radial-gradient(circle at 50% 40%,#12304aee,#07070cf5)}
+#turn.on,#ranking.on{display:flex}#turn .nbox,#ranking .nbox{text-align:center;animation:fade .3s;padding:0 20px}
+#turn h1,#ranking h1{font-size:clamp(30px,5vw,64px);margin:8px 0 0}#turn h2{color:#b9b9c9;font-weight:500;margin:6px 0 14px}
+.tumic{color:#ddd;margin:0 0 6px}.tumic.warn{color:var(--warn)}
+.board{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin:10px 0 22px;color:#b9b9c9;font-size:14px}.board b{color:#fff}
+#rkList{display:flex;flex-direction:column;gap:8px;margin:18px auto 24px;width:min(460px,90vw)}
+.rk{display:flex;align-items:center;gap:14px;padding:10px 16px;border-radius:14px;background:#ffffff0d;border:1px solid #ffffff1a;text-align:left}
+.rk.win{background:linear-gradient(135deg,#ff4d6d33,#ffd23f22);border-color:#ffd23f66}
+.rk .pl{font-size:24px;width:34px;text-align:center}.rk .nm{flex:1;font-weight:700;font-size:18px}.rk .pts b{font-size:22px}.rk .sub{margin:0;font-size:12px}
