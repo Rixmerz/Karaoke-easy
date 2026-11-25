@@ -1,12 +1,12 @@
 # Product context
-Last updated: 2026-11-23
+Last updated: 2026-11-25
 
 ## Product
 - Name: Karaoke Easy [repo]
 - One-line description: App de Windows para practicar canto con cualquier canción: quita la voz, sincroniza la letra, cambia tono y velocidad, repite tramos y puntúa la afinación [repo]
 - Stage: idea (producto funcional, sin usuarios) [user, 2026-11]
-- Business model: ejecutable de Windows con licencia anual por profesor, activada contra una base de datos online [decisión PO, 2026-11-23]
-- Pricing: hipótesis a validar: prueba gratis 14 días; licencia anual por profesor. Precio: Unknown, se fija tras entrevistas
+- Business model: canal principal Steam, pago único (uso personal y en clase); venta directa de la licencia anual Eventos para uso comercial [decisión PO, 2026-11-25]
+- Pricing: Steam USD 19,99 (15 % de descuento de lanzamiento; precio por país de Valve); Eventos USD 249/año por venta directa [decisión PO, 2026-11-25]
 
 ## Context profile
 - Customer type: B2C profesional (profesor de canto independiente) [decisión PO]
@@ -17,7 +17,7 @@ Last updated: 2026-11-23
 - Regulation: derechos de autor de música y letras; condiciones de uso de YouTube
 
 ## Users and customers
-- Primary segment: profesores de canto [user + decisión PO]
+- Primary segment: fiestas en casa y jugadores en Steam; profesores de canto como segmento de marketing [decisión PO, 2026-11-25]
 - Other segments: alumnos (usan, no pagan); organizadores de eventos y bares (más adelante)
 - Buyer vs user: paga el profesor
 - Non-target users (por ahora): eventos y bares, porque exigen licencias de reproducción pública, soporte en vivo y otra venta

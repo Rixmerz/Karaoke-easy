@@ -31,7 +31,7 @@ Lo más corto posible: unas **5–6 semanas** desde el pago hasta el lanzamiento
 ## 4. Roadmap de modos de juego (con condiciones para avanzar)
 Cada etapa solo empieza si se cumple la condición de la anterior. Sin condición cumplida, no se invierte.
 
-### AHORA: lanzamiento local (fiesta en casa)
+### AHORA: lanzamiento local (fiesta en casa) · USD 19,99
 - Modo fiesta, puntuación, segunda pantalla: **ya existen**.
 - **Teléfono como micrófono:** la app muestra un código QR, el teléfono abre una página local y envía la voz por wifi.
 - **Duelo por turnos:** 2 a 8 jugadores, ranking al final de la ronda.

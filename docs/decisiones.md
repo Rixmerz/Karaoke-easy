@@ -101,3 +101,34 @@
 ## 2026-11-25 · Exportar e importar canciones (.karaoke)
 **Decisión:** las canciones se pueden exportar a un archivo `.karaoke` (un zip con una carpeta "Artista - Título" por canción: pistas, letra sincronizada, notas, portada y video) e importar desde él.
 **Límite:** la app solo guarda y abre sus propios archivos. No tiene botones para compartir ni un catálogo online. Lo que el usuario haga con sus archivos es responsabilidad suya, según los términos de uso.
+
+## 2026-11-25 · REAJUSTE: Steam es el canal principal, y nuevos precios
+**Cambio:** reemplaza la decisión "licencia anual por profesor de canto" como canal principal.
+
+**Por qué:**
+- **Canibalización:** si Steam vende a USD 19,99 casi todo lo que la licencia Profesor vendía a USD 79/año, los profesores comprarían en Steam. Mantener los dos sería competir contra nosotros mismos.
+- **Steam ya da cobros, precio por país, licencia, actualizaciones y una vitrina con público.** Somos una sola persona: cuanto menos construyamos aparte, mejor.
+- **Los deseados validan sin programar nada:** la ficha "Próximamente" mide la demanda mientras se desarrolla.
+
+**Precios nuevos:**
+| Canal | Producto | Precio |
+|---|---|---|
+| Steam | Karaoke Easy (uso personal y en clase): todo menos lo comercial | **USD 19,99** pago único. 15 % de descuento de lanzamiento. Precio por país según la sugerencia de Valve |
+| Steam (más adelante) | Expansiones: modos online (etapa "Después") | USD 4,99–9,99 cada una, solo si se cumple su condición |
+| Venta directa (Lemon Squeezy) | **Licencia Eventos** (uso comercial: bares, animadores, eventos): lote ilimitado, MP4, segunda pantalla | **USD 249/año** (sin cambios) |
+| Eliminado | Licencia Profesor USD 79/año | Los profesores compran en Steam |
+
+**Consecuencias:**
+- El sistema de licencias de Lemon Squeezy queda **solo para Eventos**. La versión Steam usa la cuenta de Steam.
+- Profesores pasa a ser un **segmento de marketing**: comunidades de canto y videos "cómo practicar con cualquier canción". Ya no es un plan aparte.
+- Para ingresos recurrentes en Steam: actualizaciones gratis que traigan reseñas, y expansiones de pago solo cuando haya demanda probada.
+
+**Orden de trabajo:**
+1. Dueño: cuenta de Steamworks y pago (empiezan los 30 días).
+2. Ficha + video.
+3. Versión Steam: licencia de Steam, sin YouTube, actualizaciones por Steam.
+4. Teléfono como micrófono + duelo por turnos.
+5. Aceleración GPU.
+6. Lanzamiento.
+
+**Meta de validación:** 5.000 deseados antes del lanzamiento. Si en 8 semanas hay menos de 1.000, se revisa todo el plan.
