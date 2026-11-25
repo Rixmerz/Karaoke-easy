@@ -150,7 +150,7 @@ $("libSearch").oninput = renderLibrary; $("libSort").onchange = renderLibrary;
 function songMenu(e, s) {
   closeMenu();
   const m = document.createElement("div"); m.className = "menu"; m.id = "menu";
-  m.innerHTML = `<button data-a="play">${icon("play", 15)} Cantar</button><button data-a="fav">${icon("heart", 15)} ${isFav(s.id) ? "Quitar de favoritas" : "Añadir a favoritas"}</button><button data-a="list">${icon("list-plus", 15)} Añadir a lista…</button><button data-a="edit">${icon("pencil", 15)} Editar título y artista</button><button data-a="folder">${icon("folder-open", 15)} Abrir carpeta</button><button data-a="remove">${icon("trash-2", 15)} Quitar de la biblioteca</button>`;
+  m.innerHTML = `<button data-a="play">${icon("play", 15)} Cantar</button><button data-a="fav">${icon("heart", 15)} ${isFav(s.id) ? "Quitar de favoritas" : "Añadir a favoritas"}</button><button data-a="list">${icon("list-plus", 15)} Añadir a lista…</button><button data-a="edit">${icon("pencil", 15)} Editar título y artista</button><button data-a="export">${icon("download", 15)} Exportar (.karaoke)</button><button data-a="folder">${icon("folder-open", 15)} Abrir carpeta</button><button data-a="remove">${icon("trash-2", 15)} Quitar de la biblioteca</button>`;
   m.style.left = Math.min(e.clientX, innerWidth - 210) + "px"; m.style.top = e.clientY + "px";
   m.onclick = async ev => {
     const a = ev.target.closest("button")?.dataset.a; closeMenu();
@@ -158,6 +158,7 @@ function songMenu(e, s) {
     if (a === "fav") toggleFav(s.id);
     if (a === "list") addToList(s);
     if (a === "edit") editSong(s);
+    if (a === "export") exportSongs([s]);
     if (a === "folder") openPath(s.folder.replace(/[\\/]reproductor$/, ""));
     if (a === "remove") { await api("delete?id=" + s.id, {}); toast("Quitada de la biblioteca (los archivos se conservan)"); loadLibrary(); }
   };
@@ -196,6 +197,44 @@ async function openPath(p) {
     else toast("Carpeta: " + p, "", 6000);
   } catch (e) { toast("No se pudo abrir: " + p, "err"); }
 }
+
+// ---------------- exportar / importar ----------------
+async function exportSongs(list) {
+  if (!list.length) return toast("No hay canciones para exportar", "err");
+  let dest = null;
+  const def = list.length === 1 ? `${list[0].artist ? list[0].artist + " - " : ""}${list[0].title || "cancion"}` : `Karaoke Easy - ${list.length} canciones`;
+  if (T?.dialog?.save) {
+    dest = await T.dialog.save({ defaultPath: def.replace(/[<>:"/\\|?*]/g, "") + ".karaoke", filters: [{ name: "Canciones de Karaoke Easy", extensions: ["karaoke"] }] });
+    if (!dest) return;
+  }
+  loading(true, `Exportando ${list.length} canción${list.length > 1 ? "es" : ""}…`);
+  try {
+    const r = await api("export", { ids: list.map(x => x.id), dest });
+    if (r.error) throw new Error(r.error);
+    toast(`Exportado: ${r.path.split(/[\\/]/).pop()}`, "ok", 3500);
+    openPath(r.path.replace(/[\\/][^\\/]+$/, ""));
+  } catch (e) { toast(e.message || "No se pudo exportar", "err", 5000); } finally { loading(false); }
+}
+async function importFiles(paths) {
+  if (!paths.length) return;
+  loading(true, "Importando canciones…");
+  try {
+    const r = await api("import", { paths });
+    if (r.count) toast(`${r.count} canción${r.count > 1 ? "es importadas" : " importada"}`, "ok", 3000);
+    (r.errors || []).forEach(e => toast(e, "err", 6000));
+    await loadLibrary(); go("library");
+  } catch (e) { toast("No se pudo importar", "err"); } finally { loading(false); }
+}
+$("exportBtn").onclick = () => {
+  const q = $("libSearch").value.toLowerCase();
+  exportSongs(tabSongs(TAB).filter(s => ((s.title || "") + " " + (s.artist || "")).toLowerCase().includes(q)));
+};
+$("importBtn").onclick = async () => {
+  if (!T?.dialog) return toast("Arrastra un archivo .karaoke a la ventana para importarlo");
+  const r = await T.dialog.open({ multiple: true, filters: [{ name: "Canciones de Karaoke Easy", extensions: ["karaoke", "zip"] }] });
+  if (r) importFiles(Array.isArray(r) ? r : [r]);
+};
+const isPkg = x => /\.(karaoke|zip)$/i.test(x || "");
 
 // ---------------- nueva canción ----------------
 let QUEUE = [], semitones = 0;
@@ -247,7 +286,8 @@ if (T?.webview) {
   T.webview.getCurrentWebview().onDragDropEvent(ev => {
     const t = ev.payload.type;
     $("drop").classList.toggle("over", t === "over" || t === "enter");
-    if (t === "drop") { go("new"); addInputs(ev.payload.paths || []); }
+    if (t === "drop") { const ps = ev.payload.paths || [], pk = ps.filter(isPkg), rest = ps.filter(x => !isPkg(x));
+      if (pk.length) importFiles(pk); if (rest.length) { go("new"); addInputs(rest); } }
   });
 }
 document.addEventListener("dragover", e => e.preventDefault());

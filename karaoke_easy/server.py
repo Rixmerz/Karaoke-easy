@@ -341,6 +341,35 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None, lic=None):
                 except Exception:
                     out = raw
                 return self._json({"ok": True, "file": str(out), "folder": str(rec_dir)})
+            if parts == ["api", "export"]:
+                b = self._body()
+                folders = [songs.folder(i) for i in b.get("ids", [])]
+                folders = [f for f in folders if f is not None]
+                if not folders:
+                    return self._json({"error": "no hay canciones para exportar"}, 400)
+                dest = b.get("dest")
+                if not dest:
+                    from . import settings
+                    import json as _j
+                    if len(folders) == 1:
+                        m = _j.loads((folders[0] / library.SONG).read_text(encoding="utf-8"))
+                        nm = library._safe_name(" - ".join(x for x in (m.get("artist"), m.get("title")) if x))
+                    else:
+                        nm = f"Karaoke Easy - {len(folders)} canciones"
+                    dest = Path(settings.load()["output_dir"]) / "Exportadas" / (nm + library.EXPORT_EXT)
+                try:
+                    out = library.export_songs(folders, Path(dest), with_video=b.get("video", True))
+                except Exception as e:
+                    return self._json({"error": f"No se pudo exportar: {e}"}, 500)
+                return self._json({"path": str(out), "count": len(folders)})
+            if parts == ["api", "import"]:
+                n, errs = 0, []
+                for pth in self._body().get("paths", []):
+                    try:
+                        n += len(library.import_package(Path(pth)))
+                    except Exception as e:
+                        errs.append(f"{Path(pth).name}: {e}")
+                return self._json({"count": n, "errors": errs})
             if parts == ["api", "edit"]:
                 folder = songs.folder(q.get("id", [""])[0])
                 if folder is None:

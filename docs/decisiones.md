@@ -97,3 +97,7 @@
 - Meta: **5.000 deseados en 8 semanas**. Si se cumple, Steam pasa a ser el canal principal.
 **Pendiente:** confirmar que Valve acepta programas que separan la voz; crear la cuenta de Steamworks (dueño).
 **Antes del lanzamiento:** aceleración por GPU, teléfono como micrófono, varios jugadores por turnos, puntuaciones para compartir.
+
+## 2026-11-25 · Exportar e importar canciones (.karaoke)
+**Decisión:** las canciones se pueden exportar a un archivo `.karaoke` (un zip con una carpeta "Artista - Título" por canción: pistas, letra sincronizada, notas, portada y video) e importar desde él.
+**Límite:** la app solo guarda y abre sus propios archivos. No tiene botones para compartir ni un catálogo online. Lo que el usuario haga con sus archivos es responsabilidad suya, según los términos de uso.

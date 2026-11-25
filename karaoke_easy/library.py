@@ -188,3 +188,94 @@ def save_lists(d):
                            for p in d.get("playlists", [])][:200]}
     (paths.user_cache() / "listas.json").write_text(json.dumps(clean, ensure_ascii=False, indent=1), encoding="utf-8")
     return clean
+
+
+# ---------------- exportar / importar (.karaoke) ----------------
+# Un .karaoke es un zip con una carpeta por canción: "<Artista - Título>/" con cancion.json, inst.m4a,
+# voz.m4a, pitch.json, cover.jpg y (opcional) video.<ext>. Las versiones transpuestas no se incluyen
+# (se regeneran). La app no comparte nada: solo guarda y abre sus propios archivos.
+EXPORT_EXT = ".karaoke"
+_PKG_FILES = ("cancion.json", "inst.m4a", "voz.m4a", "pitch.json", "cover.jpg")
+_VIDEO_EXT = (".mp4", ".mkv", ".webm", ".mov")
+_MAX_IMPORT = 4 * 1024 ** 3  # 4 GB descomprimido como máximo
+
+
+def _safe_name(s: str) -> str:
+    import re
+    s = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", s or "").strip(" .")
+    return s[:80] or "cancion"
+
+
+def export_songs(folders, dest: Path, with_video=True) -> Path:
+    import zipfile
+    dest = Path(dest)
+    if dest.suffix.lower() != EXPORT_EXT:
+        dest = dest.with_suffix(EXPORT_EXT)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_suffix(".tmp")
+    used = set()
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as z:  # audio y video ya vienen comprimidos
+        for f in folders:
+            f = Path(f)
+            meta = json.loads((f / SONG).read_text(encoding="utf-8"))
+            base = _safe_name(" - ".join(x for x in (meta.get("artist"), meta.get("title")) if x))
+            name, i = base, 2
+            while name.lower() in used:
+                name, i = f"{base} ({i})", i + 1
+            used.add(name.lower())
+            for fn in _PKG_FILES:
+                if fn != SONG and (f / fn).exists():
+                    z.write(f / fn, f"{name}/{fn}")
+            v = meta.get("video")
+            if with_video and v and Path(v).exists() and Path(v).suffix.lower() in _VIDEO_EXT:
+                vn = "video" + Path(v).suffix.lower()
+                z.write(v, f"{name}/{vn}")
+                meta["video"] = vn  # relativo dentro del paquete
+            else:
+                meta["video"] = None
+            z.writestr(f"{name}/{SONG}", json.dumps(meta, ensure_ascii=False))
+    tmp.replace(dest)
+    return dest
+
+
+def import_package(src: Path, dest_root: Path | None = None):
+    """Importa un .karaoke (o .zip con el mismo formato). Devuelve las carpetas registradas."""
+    import zipfile
+    dest_root = Path(dest_root or paths.user_cache() / "importadas")
+    out = []
+    with zipfile.ZipFile(src) as z:
+        infos = z.infolist()
+        if sum(i.file_size for i in infos) > _MAX_IMPORT:
+            raise ValueError("El archivo es demasiado grande.")
+        songs = {}
+        for i in infos:
+            parts = i.filename.replace("\\", "/").split("/")
+            if i.is_dir() or len(parts) != 2 or not parts[0] or parts[0] in (".", ".."):
+                continue
+            fn = parts[1]
+            if fn in _PKG_FILES or (fn.startswith("video.") and Path(fn).suffix.lower() in _VIDEO_EXT):
+                songs.setdefault(parts[0], {})[fn] = i
+        songs = {k: v for k, v in songs.items() if SONG in v and "inst.m4a" in v}
+        if not songs:
+            raise ValueError("No es un archivo de canciones de Karaoke Easy.")
+        for name, files in songs.items():
+            meta = json.loads(z.read(files[SONG]).decode("utf-8"))
+            base = dest_root / _safe_name(name)
+            target, k = base, 2
+            while target.exists():
+                target, k = Path(f"{base} ({k})"), k + 1
+            folder = target / PKG
+            folder.mkdir(parents=True)
+            for fn, info in files.items():
+                if fn == SONG:
+                    continue
+                with z.open(info) as r, open(folder / fn, "wb") as w:
+                    import shutil
+                    shutil.copyfileobj(r, w, 1 << 20)
+            vids = [fn for fn in files if fn.startswith("video.")]
+            meta["video"] = str((folder / vids[0]).resolve()) if vids else None
+            meta["imported"] = time.strftime("%Y-%m-%d %H:%M")
+            (folder / SONG).write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+            register(folder)
+            out.append(folder)
+    return out
