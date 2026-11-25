@@ -203,3 +203,108 @@ jobs:
           files: |
             Output/*.exe
             Output/KaraokeEasy-Modelos.zip
+
+  # Edición Steam (karaoke_easy/edition.py): mismo código, sin enlaces, sin actualizador propio,
+  # con Steamworks en la app. No lleva instalador: Steam instala la carpeta. Ver docs/steam-build.md.
+  steam:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    outputs:
+      version: ${{ steps.pack.outputs.version }}
+      can_upload: ${{ steps.check.outputs.can_upload }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Caché de modelos
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: models-${{ hashFiles('tools/download_models.py') }}-small
+      - name: Dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt pyinstaller pytest
+      - name: Pruebas de la edición Steam
+        run: python -m pytest -q tests/test_edition.py
+      - name: Descargar modelos
+        run: python tools/download_models.py small
+      - name: Motor (PyInstaller, edición Steam)
+        shell: pwsh
+        run: |
+          Set-Content -Path EDITION -Value "steam" -NoNewline -Encoding ascii
+          pyinstaller --noconfirm KaraokeEasy.spec
+          if (-not (Test-Path dist\KaraokeEngine\_internal\EDITION)) { throw "EDITION no quedó dentro del motor" }
+      - name: Caché de Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: steam
+      - name: App de escritorio (Tauri 2 + Steamworks)
+        shell: pwsh
+        run: |
+          $ver = (Get-Content VERSION).Trim()
+          (Get-Content src-tauri\tauri.conf.json -Raw) -replace '"version": "[^"]+"', "`"version`": `"$ver`"" | Set-Content src-tauri\tauri.conf.json -Encoding utf8
+          cargo build --release --features steam --manifest-path src-tauri/Cargo.toml
+          if (-not (Test-Path src-tauri\target\release\KaraokeEasy.exe)) { throw "no se generó KaraokeEasy.exe" }
+      - name: Carpeta y zip KaraokeEasy-Steam-<versión>
+        id: pack
+        shell: pwsh
+        run: |
+          $ver = (Get-Content VERSION).Trim()
+          $dst = "dist-steam\KaraokeEasy"
+          New-Item -ItemType Directory -Force $dst | Out-Null
+          Copy-Item src-tauri\target\release\KaraokeEasy.exe $dst
+          # steamworks-sys trae el SDK redistribuible y deja steam_api64.dll en su carpeta de build
+          $dll = Get-ChildItem src-tauri\target\release\build -Recurse -Filter steam_api64.dll | Where-Object { $_.FullName -match "steamworks-sys" } | Select-Object -First 1
+          if (-not $dll) { throw "no se encontró steam_api64.dll" }
+          Copy-Item $dll.FullName $dst
+          Copy-Item -Recurse dist\KaraokeEngine "$dst\engine"
+          if (Test-Path "$dst\engine\_internal\yt_dlp") { throw "la versión Steam no debe incluir yt-dlp" }
+          Compress-Archive -Path "$dst\*" -DestinationPath "dist-steam\KaraokeEasy-Steam-$ver.zip" -CompressionLevel Fastest
+          "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Get-ChildItem dist-steam | Select-Object Name, Length
+      - name: ¿Hay credenciales de Steam?
+        id: check
+        shell: pwsh
+        env:
+          U: ${{ secrets.STEAM_USERNAME }}
+          C: ${{ secrets.STEAM_CONFIG_VDF }}
+          A: ${{ vars.STEAM_APP_ID }}
+          D: ${{ vars.STEAM_DEPOT_ID }}
+        run: |
+          $ok = [bool]($env:U -and $env:C -and $env:A -and $env:D)
+          "can_upload=$($ok.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          if (-not $ok) { "Faltan STEAM_USERNAME/STEAM_CONFIG_VDF (secretos) o STEAM_APP_ID/STEAM_DEPOT_ID (variables): no se sube a Steam." }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KaraokeEasy-Steam
+          path: dist-steam/KaraokeEasy-Steam-*.zip
+          compression-level: 0
+
+  # Subida a Steam (SteamPipe) en la rama "beta", solo si hay credenciales. Corre en Linux
+  # (donde game-ci/steam-deploy está probado) con el zip que construyó el job anterior.
+  steam-upload:
+    needs: steam
+    if: needs.steam.outputs.can_upload == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: KaraokeEasy-Steam
+      - name: Descomprimir
+        run: mkdir -p build/KaraokeEasy && unzip -q KaraokeEasy-Steam-*.zip -d build/KaraokeEasy
+      - uses: game-ci/steam-deploy@v3.3.0
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: ${{ vars.STEAM_APP_ID }}
+          buildDescription: v${{ needs.steam.outputs.version }} (${{ github.sha }})
+          rootPath: build
+          depot1Path: KaraokeEasy
+          depot1Id: ${{ vars.STEAM_DEPOT_ID }}
+          releaseBranch: beta

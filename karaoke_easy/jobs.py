@@ -36,6 +36,9 @@ def _worker(spec, q):
         src, artist, title = spec["input"], spec.get("artist", ""), spec.get("title", "")
         out_dir = spec["output_dir"]
         if is_url(src):
+            from . import edition
+            if edition.is_steam():
+                raise RuntimeError("La versión de Steam no descarga canciones desde enlaces.")
             q.put(("dl", {"phase": "start"}))
             from .downloader import deno_path
             log(f"Descargando enlace (motor JavaScript: {'listo' if deno_path() else 'no encontrado'})…")

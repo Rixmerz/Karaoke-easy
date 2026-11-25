@@ -6,3 +6,4 @@ dist/
 models/
 src-tauri/target/
 src-tauri/gen/
+EDITION

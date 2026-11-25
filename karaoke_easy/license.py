@@ -8,6 +8,9 @@ Resumen:
     si no hay conexión se sigue funcionando, y tras 30 días sin ninguna validación
     exitosa se pide reconectar.
   * Plan según el nombre de la variante: "Profesor" o "Eventos".
+  * Edición Steam (ver edition.py): no hay prueba ni clave personal; la compra en Steam da
+    el estado "steam" (todo lo personal). Solo la licencia Eventos (uso comercial) se activa
+    con clave de Lemon Squeezy, y si deja de valer se vuelve a "steam", nunca se bloquea.
 
 Toda la conversación con Lemon Squeezy está en `LemonSqueezy` (abajo): si su formato
 cambia, solo hay que tocar esa clase. Todas las reglas de qué permite cada plan están en
@@ -46,6 +49,7 @@ HTTP_TIMEOUT = 15
 #   party  : modo fiesta y segunda pantalla
 FEATURES = {
     "trial":      {"create": True,  "batch": True,  "party": True},
+    "steam":      {"create": True,  "batch": False, "party": True},   # compra en Steam: uso personal
     "eventos":    {"create": True,  "batch": True,  "party": True},
     "profesor":   {"create": True,  "batch": False, "party": False},
     "reconnect":  {"create": False, "batch": False, "party": False},
@@ -53,7 +57,14 @@ FEATURES = {
 }
 MAX_QUEUED_NO_BATCH = 3  # trabajos en cola/en curso a la vez sin la función "batch"
 
-TIER_NAMES = {"profesor": "Profesor", "eventos": "Eventos"}
+TIER_NAMES = {"profesor": "Profesor", "eventos": "Eventos", "steam": "Steam"}
+# Planes que se pueden activar con clave en cada edición.
+KEY_TIERS = {"direct": ("profesor", "eventos"), "steam": ("eventos",)}
+
+
+def _edition():
+    from . import edition
+    return edition.current()
 
 
 class LicenseError(Exception):
@@ -180,7 +191,8 @@ def _read_signed(path, fp):
 
 # ---------------------------------------------------------------- gestor
 class LicenseManager:
-    def __init__(self, folder=None, client=None, clock=time.time, fingerprint=None):
+    def __init__(self, folder=None, client=None, clock=time.time, fingerprint=None, edition=None):
+        self._edition_fixed = edition
         self.folder = folder or paths.user_cache()
         self.client = client or LemonSqueezy()
         self.clock = clock
@@ -216,9 +228,18 @@ class LicenseManager:
             return start
         return d["start"]
 
+    @property
+    def edition(self):
+        return self._edition_fixed or _edition()
+
     # ---- estado
     def status(self):
         now = self.clock()
+        if self.edition == "steam":  # la propiedad la da Steam: sin prueba
+            lic = self._license()
+            if lic and lic["tier"] == "eventos" and now - lic.get("validated_at", 0) <= OFFLINE_GRACE:
+                return self._public("eventos", lic=lic)
+            return self._public("steam", lic=lic)
         trial_start = self.trial_start()  # la prueba cuenta desde el primer uso, haya licencia o no
         lic = self._license()
         if lic:
@@ -236,7 +257,8 @@ class LicenseManager:
                   "unlicensed": "Sin licencia"}
         out = {"state": state, "label": TIER_NAMES.get(state) or labels[state],
                "tier": lic["tier"] if lic else None, "features": dict(FEATURES[state]),
-               "max_queued": max_queued_jobs(state), "buy_url": BUY_URL, "trial_days": TRIAL_DAYS}
+               "max_queued": max_queued_jobs(state), "buy_url": BUY_URL, "trial_days": TRIAL_DAYS,
+               "edition": self.edition}
         if days_left is not None:
             out["days_left"] = days_left
         if lic:
@@ -265,6 +287,9 @@ class LicenseManager:
             tier = _tier_from(meta)
             if not tier:
                 raise LicenseError("Esta clave no corresponde a un plan de Karaoke Easy.")
+            if tier not in KEY_TIERS.get(self.edition, ()):
+                raise LicenseError("En la versión de Steam solo se activa la licencia Eventos "
+                                   "(uso comercial). El uso personal ya está incluido en tu compra de Steam.")
         except LicenseError:  # no dejar ocupado un cupo de equipo con una clave ajena
             try:
                 self.client.deactivate(key, inst.get("id"))
@@ -349,6 +374,9 @@ def check_new_jobs(state, active_now, adding):
         return ("Tu prueba gratuita terminó. Puedes seguir cantando las canciones que ya tienes; "
                 "para crear nuevas, activa una licencia en Ajustes.")
     lim = max_queued_jobs(state)
+    if lim is not None and active_now + adding > lim and state == "steam":
+        return (f"Puedes tener hasta {lim} canciones en proceso a la vez. Espera a que terminen. "
+                "Para procesar muchas de una vez (uso comercial) necesitas la licencia Eventos.")
     if lim is not None and active_now + adding > lim:
         return (f"Con el plan Profesor puedes tener hasta {lim} canciones en proceso a la vez. "
                 "Espera a que terminen o pásate al plan Eventos para procesar muchas de una vez.")

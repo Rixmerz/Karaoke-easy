@@ -11,6 +11,9 @@ use std::time::Duration;
 
 use tauri::{Manager, RunEvent};
 
+#[cfg(feature = "steam")]
+mod steam;
+
 struct Engine {
     child: Mutex<Option<Child>>,
     info: Result<Info, String>,
@@ -48,6 +51,7 @@ fn selftest_done(app: tauri::AppHandle, ok: bool) {
     app.exit(if ok { 0 } else { 1 });
 }
 
+#[cfg_attr(feature = "steam", allow(dead_code))]
 /// Ejecuta el instalador de una actualización (descargado por el motor) y cierra la app.
 /// Solo acepta un .exe dentro de %LOCALAPPDATA%\KaraokeEasy\actualizacion.
 #[tauri::command]
@@ -142,16 +146,36 @@ fn start_engine() -> Result<(Child, Info), String> {
 }
 
 fn main() {
+    // Edición Steam: Steam debe estar abierto (y la app lanzada desde él) antes de arrancar el motor.
+    #[cfg(feature = "steam")]
+    let steam_client = match steam::init() {
+        steam::Init::Relaunching => std::process::exit(0),
+        steam::Init::Ready(c) => c,
+        steam::Init::Failed(msg) => return show_fatal(msg),
+    };
     let (child, info) = match start_engine() {
         Ok((c, i)) => (Some(c), Ok(i)),
         Err(e) => (None, Err(e)),
     };
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
-        .manage(Engine { child: Mutex::new(child), info })
-        .invoke_handler(tauri::generate_handler![engine_info, selftest_done, selftest_log, run_installer])
+        .manage(Engine { child: Mutex::new(child), info });
+    #[cfg(feature = "steam")]
+    let builder = builder
+        .manage(steam::Steam { client: Mutex::new(Some(steam_client)) })
+        .invoke_handler(tauri::generate_handler![
+            engine_info,
+            selftest_done,
+            selftest_log,
+            steam::steam_unlock_achievement
+        ]);
+    // La edición directa trae su propio actualizador (run_installer); en Steam actualiza Steam.
+    #[cfg(not(feature = "steam"))]
+    let builder =
+        builder.invoke_handler(tauri::generate_handler![engine_info, selftest_done, selftest_log, run_installer]);
+    let app = builder
         .build(tauri::generate_context!())
         .expect("error al iniciar Karaoke Easy");
     app.run(|handle, event| {
@@ -163,4 +187,27 @@ fn main() {
             }
         }
     });
+}
+
+/// Muestra un error que impide abrir la app (p. ej. Steam cerrado) y sale.
+#[cfg(feature = "steam")]
+fn show_fatal(msg: String) {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+    let app = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .setup(move |app| {
+            for w in app.webview_windows().values() {
+                let _ = w.hide(); // solo el mensaje, sin la ventana principal
+            }
+            let h = app.handle().clone();
+            app.dialog()
+                .message(msg)
+                .title("Karaoke Easy")
+                .kind(MessageDialogKind::Error)
+                .show(move |_| h.exit(1));
+            Ok(())
+        })
+        .build(tauri::generate_context!())
+        .expect("error al iniciar Karaoke Easy");
+    app.run(|_, _| {});
 }

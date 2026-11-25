@@ -191,7 +191,9 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None, lic=None):
                     return self._json(library.load_lists())
                 if parts[:2] == ["api", "version"]:
                     from . import paths
-                    return self._json({"version": paths.app_version(), "bundled_models": paths.BUNDLED_MODELS})
+                    from . import edition
+                    return self._json({"version": paths.app_version(), "bundled_models": paths.BUNDLED_MODELS,
+                                       **edition.features()})
                 if parts[:2] == ["api", "diag"]:
                     from . import paths
                     f = paths.user_cache() / "registro.log"
@@ -201,7 +203,9 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None, lic=None):
                     return self._json({"ready": paths.models_ready(), "dir": str(paths.MODELS_DIR),
                                        "download": downloads.MODELS.public()})
                 if parts[:2] == ["api", "update"]:
-                    from . import downloads
+                    from . import downloads, edition
+                    if edition.is_steam():  # Steam entrega las actualizaciones
+                        return self._json({"disabled": True, "state": "idle"})
                     return self._json(downloads.UPDATE.public())
                 if not parts:
                     return self._file(STATIC / "index.html")
@@ -264,8 +268,11 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None, lic=None):
             parts = [p for p in u.path.split("/") if p]
             if parts == ["api", "jobs"] and jobs is not None:
                 body = self._body()
-                from . import license, settings
+                from . import edition, license, settings
                 inputs = body.get("inputs", [])
+                if edition.is_steam() and any(edition.is_url(x) for x in inputs):
+                    return self._json({"error": "La versión de Steam no descarga canciones desde enlaces. "
+                                                "Usa archivos de tu equipo (MP3, MP4, WAV…) o importa un archivo .karaoke."}, 400)
                 active = sum(1 for j in jobs.jobs if j.state in ("queued", "running"))
                 err = license.check_new_jobs(L().status()["state"], active, len(inputs))
                 if err:
@@ -311,7 +318,9 @@ def make_handler(songs: Songs, run_ffmpeg, token=None, jobs=None, lic=None):
                     return self._json({"error": "origen no permitido"}, 400)
                 return self._json({"started": downloads.start_models(url)})
             if parts == ["api", "update", "download"]:
-                from . import downloads
+                from . import downloads, edition
+                if edition.is_steam():
+                    return self._json({"started": False, "disabled": True})
                 return self._json({"started": downloads.start_update(self._body().get("url", ""))})
             if parts == ["api", "recording"]:
                 folder = songs.folder(q.get("id", [""])[0])
