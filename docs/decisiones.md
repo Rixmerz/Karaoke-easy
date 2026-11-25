@@ -106,14 +106,14 @@
 **Cambio:** reemplaza la decisión "licencia anual por profesor de canto" como canal principal.
 
 **Por qué:**
-- **Canibalización:** si Steam vende a USD 19,99 casi todo lo que la licencia Profesor vendía a USD 79/año, los profesores comprarían en Steam. Mantener los dos sería competir contra nosotros mismos.
+- **Canibalización:** si Steam vende a USD 14,99 casi todo lo que la licencia Profesor vendía a USD 79/año, los profesores comprarían en Steam. Mantener los dos sería competir contra nosotros mismos.
 - **Steam ya da cobros, precio por país, licencia, actualizaciones y una vitrina con público.** Somos una sola persona: cuanto menos construyamos aparte, mejor.
 - **Los deseados validan sin programar nada:** la ficha "Próximamente" mide la demanda mientras se desarrolla.
 
 **Precios nuevos:**
 | Canal | Producto | Precio |
 |---|---|---|
-| Steam | Karaoke Easy (uso personal y en clase): todo menos lo comercial | **USD 19,99** pago único. 15 % de descuento de lanzamiento. Precio por país según la sugerencia de Valve |
+| Steam | Karaoke Easy (uso personal y en clase): todo menos lo comercial | **USD 14,99** pago único. 15 % de descuento de lanzamiento. Precio por país según la sugerencia de Valve |
 | Steam (más adelante) | Expansiones: modos online (etapa "Después") | USD 4,99–9,99 cada una, solo si se cumple su condición |
 | Venta directa (Lemon Squeezy) | **Licencia Eventos** (uso comercial: bares, animadores, eventos): lote ilimitado, MP4, segunda pantalla | **USD 249/año** (sin cambios) |
 | Eliminado | Licencia Profesor USD 79/año | Los profesores compran en Steam |
@@ -135,3 +135,12 @@
 
 ## 2026-11-25 · Aclaración: modo fiesta y segunda pantalla en Steam
 El modo fiesta y la segunda pantalla quedan **incluidos en la versión de Steam** para uso personal: son el corazón de la fiesta en casa. La licencia Eventos se diferencia por el **uso comercial** y por el **procesamiento en lote sin límite**, no por estas funciones.
+
+## 2026-11-25 · Precio de Steam: USD 14,99
+**Decisión del dueño, aceptada por el PO.** El precio pasa de USD 19,99 a **USD 14,99**, con 10 % de descuento de lanzamiento (USD 13,49).
+**Por qué está bien:**
+- 14,99 es un precio estándar de Steam y está en la franja de compra por impulso de los juegos de fiesta.
+- Es fácil de recomendar a un amigo.
+- Deja margen para descuentos de temporada (-25 % / -40 %) sin desvalorizar el producto.
+**Consecuencia:** se necesitan más ventas para la misma meta de ingresos. Las metas de validación (500 y 2.000 ventas) se mantienen porque miden demanda.
+**Ingreso neto por venta:** ~USD 10,50 tras el 30 % de Steam, antes de impuestos y del precio por país.

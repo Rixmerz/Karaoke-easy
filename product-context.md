@@ -6,7 +6,7 @@ Last updated: 2026-11-25
 - One-line description: App de Windows para practicar canto con cualquier canción: quita la voz, sincroniza la letra, cambia tono y velocidad, repite tramos y puntúa la afinación [repo]
 - Stage: idea (producto funcional, sin usuarios) [user, 2026-11]
 - Business model: canal principal Steam, pago único (uso personal y en clase); venta directa de la licencia anual Eventos para uso comercial [decisión PO, 2026-11-25]
-- Pricing: Steam USD 19,99 (15 % de descuento de lanzamiento; precio por país de Valve); Eventos USD 249/año por venta directa [decisión PO, 2026-11-25]
+- Pricing: Steam USD 14,99 (10 % de descuento de lanzamiento; precio por país de Valve); Eventos USD 249/año por venta directa [decisión PO, 2026-11-25]
 
 ## Context profile
 - Customer type: B2C profesional (profesor de canto independiente) [decisión PO]

@@ -4,7 +4,7 @@ Borrador del PO, 2026-11-25. Textos en español e inglés (Steam permite una fic
 ## Datos básicos
 - **Nombre:** Karaoke Easy
 - **Tipo:** Software (Audio). Etiquetas: Karaoke, Música, Fiesta, Multijugador local, Cooperativo local, Remote Play Together, Casual, Ritmo, Herramientas de audio
-- **Precio:** USD 19,99, con 15 % de descuento de lanzamiento
+- **Precio:** USD 14,99, con 10 % de descuento de lanzamiento
 - **Requisitos mínimos:** Windows 10 de 64 bits, 8 GB de RAM, 6 GB de disco, micrófono o teléfono. Recomendado: GPU NVIDIA para procesar en segundos
 - **Idiomas:** español e inglés (interfaz). La letra se reconoce en cualquier idioma
 
